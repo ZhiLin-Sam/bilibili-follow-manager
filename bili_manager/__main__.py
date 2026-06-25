@@ -1,14 +1,12 @@
-"""入口点"""
+"""Bilibili Follow Manager — 启动入口"""
 
-import sys
-
-from .gui.main_window import BiliGUI
+from .app import BiliApp
 from .utils.helpers import setup_logging
 
 
-def main():
+def main() -> None:
     setup_logging()
-    app = BiliGUI()
+    app = BiliApp()
     app.mainloop()
 
 
