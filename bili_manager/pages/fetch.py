@@ -290,8 +290,12 @@ class FetchPage(BasePage):
                     items = r.get("data", [])
                     if not items:
                         break
+                    if not isinstance(items, list):
+                        self.app.ui_call(lambda: self.log(f"特别关注API返回异常格式: {type(items)}"))
+                        break
                     for u in items:
-                        uids.append(u["mid"])
+                        if isinstance(u, dict) and "mid" in u:
+                            uids.append(u["mid"])
                     pn += 1
 
                 conn = database.get_conn()
@@ -305,7 +309,7 @@ class FetchPage(BasePage):
                 conn.close()
                 self.app.ui_call(lambda: self.log(f"特别关注: {len(uids)} 个已保护 ⭐"))
             except Exception as e:
-                self.app.ui_call(lambda: self.log(f"拉取特别关注失败: {e}"))
+                self.app.ui_call(lambda e=e: self.log(f"拉取特别关注失败: {e}"))
 
         threading.Thread(target=_run, daemon=True).start()
 

@@ -29,6 +29,9 @@ class BasePage(ABC):
         self.app = app
         self.frame: ttk.Frame | None = None
         self._icon_ref = None  # 保持 PhotoImage 引用
+        # 注册侧边栏导航按钮
+        icon = self._build_icon()
+        self.app.register_sidebar_btn(self.page_id, self.title, icon)
 
     @abstractmethod
     def _build_icon(self):
