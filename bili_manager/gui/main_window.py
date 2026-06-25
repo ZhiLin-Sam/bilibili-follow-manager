@@ -1180,17 +1180,6 @@ f/f比: {data.get('ff_ratio', '')}
             return
 
         # ── 2级: 名单确认 ──
-        list_dlg = tk.Toplevel(self)
-        list_dlg.title(f"取关确认 (2/3) — {count} 个账号")
-        list_dlg.geometry("500x400")
-        list_dlg.transient(self)
-
-        st = scrolledtext.ScrolledText(list_dlg, font=("Consolas", 10))
-        st.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        for line in ids:
-            st.insert(tk.END, line + "\n")
-        st.configure(state=tk.DISABLED)
-
         confirm_flag = [False]
 
         def _confirm():
@@ -1200,10 +1189,21 @@ f/f比: {data.get('ff_ratio', '')}
         def _cancel():
             list_dlg.destroy()
 
+        list_dlg = tk.Toplevel(self)
+        list_dlg.title(f"取关确认 (2/3) — {count} 个账号")
+        list_dlg.geometry("500x400")
+        list_dlg.transient(self)
+
         btn_f = ttk.Frame(list_dlg)
-        btn_f.pack(fill=tk.X, padx=10, pady=(0, 10))
-        ttk.Button(btn_f, text="确认取关这些账号", command=_confirm).pack(side=tk.LEFT, padx=3)
-        ttk.Button(btn_f, text="取消", command=_cancel).pack(side=tk.LEFT, padx=3)
+        btn_f.pack(fill=tk.X, padx=10, pady=(10, 5), side=tk.BOTTOM)
+        ttk.Button(btn_f, text="确认取关这些账号", command=_confirm).pack(side=tk.RIGHT, padx=3)
+        ttk.Button(btn_f, text="取消", command=_cancel).pack(side=tk.RIGHT, padx=3)
+
+        st = scrolledtext.ScrolledText(list_dlg, font=("Consolas", 10))
+        st.pack(fill=tk.BOTH, expand=True, padx=10, pady=(10, 5))
+        for line in ids:
+            st.insert(tk.END, line + "\n")
+        st.configure(state=tk.DISABLED)
 
         self.wait_window(list_dlg)
         if not confirm_flag[0]:
