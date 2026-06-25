@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 # ── 几何图标生成 ─────────────────────────
 # 18x18 RGBA, 线宽 2, 颜色 #d4d4d4
 
+
 def _make_icon(draw_fn) -> Image.Image:
     img = Image.new("RGBA", (18, 18), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -107,16 +108,17 @@ def _icon_expand(draw):
 
 # ── 图标工厂 ──
 ICON_FNS = {
-    "home":     _icon_home,
-    "fetch":    _icon_fetch,
-    "filter":   _icon_filter,
-    "review":   _icon_review,
+    "home": _icon_home,
+    "fetch": _icon_fetch,
+    "filter": _icon_filter,
+    "review": _icon_review,
     "unfollow": _icon_unfollow,
-    "export":   _icon_export,
-    "tags":     _icon_tags,
+    "export": _icon_export,
+    "tags": _icon_tags,
     "followers": _icon_followers,
     "scheduler": _icon_clock,
 }
+
 
 # 默认图标 (占位方框)
 def _icon_default(draw):
@@ -169,6 +171,7 @@ class BiliApp(tk.Tk):
 
         # ── 自动发现并初始化页面 ──
         from .pages import discover_pages, get_pages
+
         discover_pages()
         for page_cls in get_pages():
             page = page_cls(self)
@@ -189,8 +192,13 @@ class BiliApp(tk.Tk):
         # 标题
         hdr = ttk.Frame(self.sidebar, style="Sidebar.TFrame")
         hdr.pack(fill=tk.X, pady=(15, 10), padx=12)
-        ttk.Label(hdr, text="BiliManager", font=("Segoe UI", 11, "bold"),
-                  foreground=ACCENT, background=BG1).pack(anchor="w")
+        ttk.Label(
+            hdr,
+            text="BiliManager",
+            font=("Segoe UI", 11, "bold"),
+            foreground=ACCENT,
+            background=BG1,
+        ).pack(anchor="w")
 
         # 导航按钮容器
         self._sidebar_btns: dict[str, ttk.Button] = {}
@@ -204,8 +212,10 @@ class BiliApp(tk.Tk):
         self._sidebar_icons.extend([self._collapse_icon, self._expand_icon])
 
         self._toggle_btn = ttk.Button(
-            self.sidebar, image=self._collapse_icon, style="Collapse.TButton",
-            command=self._toggle_sidebar
+            self.sidebar,
+            image=self._collapse_icon,
+            style="Collapse.TButton",
+            command=self._toggle_sidebar,
         )
         self._toggle_btn.pack(side=tk.BOTTOM, anchor="w", padx=6, pady=6)
 
@@ -215,9 +225,12 @@ class BiliApp(tk.Tk):
         self._sidebar_icons.append(photo)
 
         btn = ttk.Button(
-            self.sidebar, text=f"  {text}", image=photo, compound=tk.LEFT,
+            self.sidebar,
+            text=f"  {text}",
+            image=photo,
+            compound=tk.LEFT,
             style="Sidebar.TButton",
-            command=lambda pid=page_id: self._switch_page_cmd(pid)
+            command=lambda pid=page_id: self._switch_page_cmd(pid),
         )
         btn.pack(fill=tk.X, padx=6, pady=1)
         self._sidebar_btns[page_id] = btn
@@ -269,9 +282,7 @@ class BiliApp(tk.Tk):
 
         # 更新侧边栏按钮样式
         for pid, btn in self._sidebar_btns.items():
-            btn.configure(
-                style="SidebarActive.TButton" if pid == page_id else "Sidebar.TButton"
-            )
+            btn.configure(style="SidebarActive.TButton" if pid == page_id else "Sidebar.TButton")
 
     def log(self, msg: str) -> None:
         """更新状态栏消息 + 终端日志"""

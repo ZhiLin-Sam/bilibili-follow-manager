@@ -14,11 +14,13 @@ class FollowersPage(BasePage):
 
     def _build_icon(self):
         from ..app import _icon_followers, _make_icon
+
         return _make_icon(_icon_followers)
 
     def _build(self, parent: ttk.Frame) -> None:
         super()._build(parent)
         f = parent
         ttk.Label(f, text="粉丝分析", style="Header.TLabel").pack(anchor="w", pady=(0, 5))
-        ttk.Label(f, text="僵尸粉检测 / 互关分析 (开发中...)",
-                  style="Subtitle.TLabel").pack(anchor="w")
+        ttk.Label(f, text="僵尸粉检测 / 互关分析 (开发中...)", style="Subtitle.TLabel").pack(
+            anchor="w"
+        )

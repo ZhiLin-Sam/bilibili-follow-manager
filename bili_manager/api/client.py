@@ -60,7 +60,7 @@ class BiliClient:
                     continue
                 return resp.json()
             except Exception as e:
-                logger.warning(f"请求失败 (attempt {attempt+1}/{max_retries}): {e}")
+                logger.warning(f"请求失败 (attempt {attempt + 1}/{max_retries}): {e}")
                 time.sleep(1)
         return {"code": -1, "message": "max retries exceeded"}
 

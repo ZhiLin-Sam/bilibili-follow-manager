@@ -30,10 +30,7 @@ def unfollow_single(client: BiliClient, fid: str) -> bool:
 
 
 def batch_unfollow(
-    client: BiliClient,
-    uids: list[str],
-    interval: float = 3.0,
-    progress_callback=None
+    client: BiliClient, uids: list[str], interval: float = 3.0, progress_callback=None
 ) -> tuple[int, int]:
     """
     批量取消关注.

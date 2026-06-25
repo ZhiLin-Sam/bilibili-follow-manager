@@ -30,6 +30,7 @@ class FetchPage(BasePage):
 
     def _build_icon(self):
         from ..app import _icon_fetch, _make_icon
+
         return _make_icon(_icon_fetch)
 
     def _build(self, parent: ttk.Frame) -> None:
@@ -37,22 +38,28 @@ class FetchPage(BasePage):
         f = parent
 
         # 标题
-        ttk.Label(f, text="登录 & 拉取关注列表", style="Header.TLabel").pack(anchor="w", pady=(0, 5))
+        ttk.Label(f, text="登录 & 拉取关注列表", style="Header.TLabel").pack(
+            anchor="w", pady=(0, 5)
+        )
 
         # 状态显示
         self.status_var = tk.StringVar(value="未登录")
-        ttk.Label(f, textvariable=self.status_var, style="Subtitle.TLabel").pack(anchor="w", pady=(0, 10))
+        ttk.Label(f, textvariable=self.status_var, style="Subtitle.TLabel").pack(
+            anchor="w", pady=(0, 10)
+        )
 
         # ── 登录按钮组 ──
         btn_row = ttk.Frame(f)
         btn_row.pack(fill=tk.X, pady=(0, 10))
 
-        self.login_btn = ttk.Button(btn_row, text="扫码登录", style="Accent.TButton",
-                                     command=self._start_login)
+        self.login_btn = ttk.Button(
+            btn_row, text="扫码登录", style="Accent.TButton", command=self._start_login
+        )
         self.login_btn.pack(side=tk.LEFT, padx=(0, 8))
 
-        self.cookie_btn = ttk.Button(btn_row, text="加载缓存 Cookie",
-                                      command=self._load_cached_cookies)
+        self.cookie_btn = ttk.Button(
+            btn_row, text="加载缓存 Cookie", command=self._load_cached_cookies
+        )
         self.cookie_btn.pack(side=tk.LEFT, padx=(0, 8))
 
         self.logout_btn = ttk.Button(btn_row, text="注销", command=self._logout)
@@ -62,13 +69,16 @@ class FetchPage(BasePage):
         fetch_row = ttk.Frame(f)
         fetch_row.pack(fill=tk.X, pady=(10, 5))
 
-        ttk.Button(fetch_row, text="拉取全部关注", style="Accent.TButton",
-                   command=self._start_fetch).pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Button(fetch_row, text="拉取特别关注",
-                   command=self._start_special_fetch).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(
+            fetch_row, text="拉取全部关注", style="Accent.TButton", command=self._start_fetch
+        ).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(fetch_row, text="拉取特别关注", command=self._start_special_fetch).pack(
+            side=tk.LEFT, padx=(0, 8)
+        )
 
-        self._btn_stop = ttk.Button(fetch_row, text="⏹ 停止", command=self._stop_op,
-                                     state=tk.DISABLED)
+        self._btn_stop = ttk.Button(
+            fetch_row, text="⏹ 停止", command=self._stop_op, state=tk.DISABLED
+        )
         self._btn_stop.pack(side=tk.LEFT, padx=(0, 8))
 
         self._op_active = False
@@ -82,7 +92,9 @@ class FetchPage(BasePage):
 
         # ── 统计 ──
         self.stats_var = tk.StringVar(value="")
-        ttk.Label(f, textvariable=self.stats_var, style="Mono.TLabel").pack(anchor="w", pady=(10, 0))
+        ttk.Label(f, textvariable=self.stats_var, style="Mono.TLabel").pack(
+            anchor="w", pady=(10, 0)
+        )
 
         # ── 刷新统计 ──
         self._refresh_stats()
@@ -127,7 +139,7 @@ class FetchPage(BasePage):
         # 获取二维码 URL
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                          "AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+            "AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
             "Referer": "https://www.bilibili.com/",
         }
 
@@ -152,14 +164,17 @@ class FetchPage(BasePage):
                 buf.seek(0)
 
                 photo = ImageTk.PhotoImage(Image.open(buf))
-                self.app.ui_call(lambda: [
-                    qr_label.configure(image=photo),
-                    setattr(qr_label, '_img', photo),
-                    status.set("请使用哔哩哔哩APP扫码")
-                ])
+                self.app.ui_call(
+                    lambda: [
+                        qr_label.configure(image=photo),
+                        setattr(qr_label, "_img", photo),
+                        status.set("请使用哔哩哔哩APP扫码"),
+                    ]
+                )
 
                 # 轮询
                 import time
+
                 start = time.time()
                 while time.time() - start < 180:
                     if self._stop_requested:
@@ -167,7 +182,7 @@ class FetchPage(BasePage):
                         return
                     poll_resp = session.get(
                         "https://passport.bilibili.com/x/passport-login/web/qrcode/poll",
-                        params={"qrcode_key": qrcode_key}
+                        params={"qrcode_key": qrcode_key},
                     ).json()
                     code = poll_resp.get("data", {}).get("code", -1)
                     if code == 0:
@@ -177,14 +192,14 @@ class FetchPage(BasePage):
                             cookies[c.name] = c.value
                         if "DedeUserID" in cookies:
                             from contextlib import suppress
+
                             with suppress(ValueError):
                                 cookies["DedeUserID"] = str(int(cookies["DedeUserID"]))
                         save_cookies(cookies)
                         _cookies = cookies
-                        self.app.ui_call(lambda c=_cookies: [
-                            self._on_login_success(c),
-                            dlg.destroy()
-                        ])
+                        self.app.ui_call(
+                            lambda c=_cookies: [self._on_login_success(c), dlg.destroy()]
+                        )
                         return
                     elif code == 86038:
                         self.app.ui_call(lambda: status.set("二维码已过期"))
@@ -226,6 +241,7 @@ class FetchPage(BasePage):
     def _start_fetch(self):
         if not self.app.client:
             from tkinter import messagebox
+
             messagebox.showwarning("未登录", "请先扫码登录")
             return
 
@@ -234,42 +250,46 @@ class FetchPage(BasePage):
 
         def _run():
             try:
+
                 def progress(pg, total, count):
                     if self._stop_requested:
                         raise RuntimeError("用户停止")
                     pct = (pg / total) * 100
                     self.app.ui_call(lambda: self.progress.configure(value=pct))
-                    self.app.ui_call(lambda: self.progress_label.configure(
-                        text=f"第 {pg}/{total} 页, 已拉取 {count} 条"))
+                    self.app.ui_call(
+                        lambda: self.progress_label.configure(
+                            text=f"第 {pg}/{total} 页, 已拉取 {count} 条"
+                        )
+                    )
 
-                follows, total = fetch_all_followings(
-                    client, progress_callback=progress
-                )
+                follows, total = fetch_all_followings(client, progress_callback=progress)
                 if self._stop_requested:
                     self.app.ui_call(lambda: self.log("拉取已停止"))
                     return
 
                 database.save_follows(follows)
-                self.app.ui_call(lambda: [
-                    self.log(f"拉取完成: {len(follows)}/{total}"),
-                    self._refresh_stats()
-                ])
+                self.app.ui_call(
+                    lambda: [self.log(f"拉取完成: {len(follows)}/{total}"), self._refresh_stats()]
+                )
             except RuntimeError:
                 self.app.ui_call(lambda: self.log("拉取已停止"))
             except Exception as ex:
                 self.app.ui_call(lambda e=ex: self.log(f"拉取失败: {e}"))
             finally:
-                self.app.ui_call(lambda: [
-                    self.progress.configure(value=0),
-                    self.progress_label.configure(text=""),
-                    self._end_op()
-                ])
+                self.app.ui_call(
+                    lambda: [
+                        self.progress.configure(value=0),
+                        self.progress_label.configure(text=""),
+                        self._end_op(),
+                    ]
+                )
 
         threading.Thread(target=_run, daemon=True).start()
 
     def _start_special_fetch(self):
         if not self.app.client:
             from tkinter import messagebox
+
             messagebox.showwarning("未登录", "请先扫码登录")
             return
 
@@ -282,7 +302,7 @@ class FetchPage(BasePage):
                 while True:
                     r = client.get(
                         "https://api.bilibili.com/x/relation/tags",
-                        params={"tagid": -10, "pn": pn, "ps": 50}
+                        params={"tagid": -10, "pn": pn, "ps": 50},
                     )
                     if r.get("code") != 0:
                         break
@@ -291,8 +311,9 @@ class FetchPage(BasePage):
                         break
                     if not isinstance(items, list):
                         _items = items
-                        self.app.ui_call(lambda it=_items: self.log(
-                            f"特别关注API返回异常格式: {type(it)}"))
+                        self.app.ui_call(
+                            lambda it=_items: self.log(f"特别关注API返回异常格式: {type(it)}")
+                        )
                         break
                     for u in items:
                         if isinstance(u, dict) and "mid" in u:
@@ -304,7 +325,7 @@ class FetchPage(BasePage):
                     conn.execute(
                         "INSERT OR REPLACE INTO verdicts (mid, verdict, rule_keep, keep_score) "
                         "VALUES (?, 'protected', '特别关注', 999)",
-                        (uid,)
+                        (uid,),
                     )
                 conn.commit()
                 conn.close()

@@ -44,6 +44,7 @@ class ReviewPage(BasePage):
 
     def _build_icon(self):
         from ..app import _icon_review, _make_icon
+
         return _make_icon(_icon_review)
 
     def _build(self, parent: ttk.Frame) -> None:
@@ -70,16 +71,26 @@ class ReviewPage(BasePage):
         # 判定筛选
         ttk.Label(ctrl, text="筛选:").pack(side=tk.LEFT, padx=(0, 4))
         self.filter_var = tk.StringVar(value="全部")
-        self._filter_cb = ttk.Combobox(ctrl, textvariable=self.filter_var,
+        self._filter_cb = ttk.Combobox(
+            ctrl,
+            textvariable=self.filter_var,
             values=["全部", "待审", "保留", "删除", "保护"],
-            state="readonly", width=8)
+            state="readonly",
+            width=8,
+        )
         self._filter_cb.pack(side=tk.LEFT, padx=(0, 8))
         self._filter_cb.bind("<<ComboboxSelected>>", lambda _: self._refresh())
 
         # 操作按钮
-        ttk.Button(ctrl, text="标记保留", command=lambda: self._set_verdict("keep")).pack(side=tk.LEFT, padx=2)
-        ttk.Button(ctrl, text="标记删除", command=lambda: self._set_verdict("delete")).pack(side=tk.LEFT, padx=2)
-        ttk.Button(ctrl, text="重置判定", command=lambda: self._set_verdict("unreviewed")).pack(side=tk.LEFT, padx=2)
+        ttk.Button(ctrl, text="标记保留", command=lambda: self._set_verdict("keep")).pack(
+            side=tk.LEFT, padx=2
+        )
+        ttk.Button(ctrl, text="标记删除", command=lambda: self._set_verdict("delete")).pack(
+            side=tk.LEFT, padx=2
+        )
+        ttk.Button(ctrl, text="重置判定", command=lambda: self._set_verdict("unreviewed")).pack(
+            side=tk.LEFT, padx=2
+        )
         ttk.Button(ctrl, text="🔄 刷新", command=self._refresh).pack(side=tk.RIGHT)
 
         # ── Treeview ──
@@ -87,11 +98,11 @@ class ReviewPage(BasePage):
         tree_frame.pack(fill=tk.BOTH, expand=True)
 
         col_ids = [c[0] for c in CORE_COLS]
-        self.tree = ttk.Treeview(tree_frame, columns=col_ids, show="headings",
-                                  selectmode="extended")
+        self.tree = ttk.Treeview(
+            tree_frame, columns=col_ids, show="headings", selectmode="extended"
+        )
         for col_id, col_name, col_width in CORE_COLS:
-            self.tree.heading(col_id, text=col_name,
-                              command=lambda c=col_id: self._sort_by_col(c))
+            self.tree.heading(col_id, text=col_name, command=lambda c=col_id: self._sort_by_col(c))
             self.tree.column(col_id, width=col_width, minwidth=40, stretch=col_id in ("sign",))
 
         # 滚动条
@@ -158,7 +169,9 @@ class ReviewPage(BasePage):
                 if not match:
                     continue
 
-            verdict_disp = {"keep": "保留", "delete": "删除", "protected": "保护⭐"}.get(verdict, "待审")
+            verdict_disp = {"keep": "保留", "delete": "删除", "protected": "保护⭐"}.get(
+                verdict, "待审"
+            )
             official = row.get("official_verify_desc", "") or ""
 
             vals = {
@@ -168,8 +181,12 @@ class ReviewPage(BasePage):
                 "official": official[:12],
                 "verdict": verdict_disp,
                 "delete_score": row.get("delete_score", 0),
-                "archive_count": row.get("archive_count", -1) if row.get("archive_count") != -1 else "?",
-                "follower": row.get("probe_follower", -1) if row.get("probe_follower", -1) != -1 else "?",
+                "archive_count": row.get("archive_count", -1)
+                if row.get("archive_count") != -1
+                else "?",
+                "follower": row.get("probe_follower", -1)
+                if row.get("probe_follower", -1) != -1
+                else "?",
             }
             item_vals = [vals.get(c[0], "") for c in CORE_COLS]
             self.tree.insert("", tk.END, values=item_vals, tags=(verdict,))
@@ -194,8 +211,12 @@ class ReviewPage(BasePage):
         sort_col: str = col
         items = [(self.tree.set(k, sort_col), k) for k in self.tree.get_children("")]
         try:
-            items.sort(key=lambda x: float(x[0]) if x[0].replace(".", "").replace("-", "").isdigit() else x[0],
-                       reverse=not self._sort_asc)
+            items.sort(
+                key=lambda x: (
+                    float(x[0]) if x[0].replace(".", "").replace("-", "").isdigit() else x[0]
+                ),
+                reverse=not self._sort_asc,
+            )
         except Exception:
             items.sort(key=lambda x: x[0], reverse=not self._sort_asc)
 
@@ -264,8 +285,9 @@ class ReviewPage(BasePage):
         import csv
         from tkinter import filedialog
 
-        fp = filedialog.asksaveasfilename(defaultextension=".csv",
-            filetypes=[("CSV", "*.csv")], title="导出")
+        fp = filedialog.asksaveasfilename(
+            defaultextension=".csv", filetypes=[("CSV", "*.csv")], title="导出"
+        )
         if not fp:
             return
 
@@ -285,7 +307,12 @@ class ReviewPage(BasePage):
             return
         rejected = []
         changed = 0
-        verdict_disp_map = {"keep": "保留", "delete": "删除", "protected": "保护⭐", "unreviewed": "待审"}
+        verdict_disp_map = {
+            "keep": "保留",
+            "delete": "删除",
+            "protected": "保护⭐",
+            "unreviewed": "待审",
+        }
 
         for item in sel:
             mid = self.tree.item(item)["values"][0]
@@ -317,5 +344,7 @@ class ReviewPage(BasePage):
         if rejected:
             messagebox.showwarning("保护中", "以下账号已锁定保护:\n" + "\n".join(rejected))
         self._update_count()
-        self.log(f"已标记 {changed} 条 → {verdict}" +
-                 (f" ({len(rejected)} 条被保护拒绝)" if rejected else ""))
+        self.log(
+            f"已标记 {changed} 条 → {verdict}"
+            + (f" ({len(rejected)} 条被保护拒绝)" if rejected else "")
+        )

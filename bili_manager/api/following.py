@@ -13,7 +13,7 @@ def fetch_all_followings(
     vmid: str | None = None,
     page_size: int = 50,
     delay: float = 0.3,
-    progress_callback=None
+    progress_callback=None,
 ) -> tuple[list[dict], int]:
     """
     拉取全部关注列表.

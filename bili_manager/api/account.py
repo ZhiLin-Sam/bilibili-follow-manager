@@ -89,7 +89,7 @@ def batch_probe(
     uids: list[str],
     concurrency: int = 5,
     batch_delay: float = 2.0,
-    progress_callback=None
+    progress_callback=None,
 ) -> list[dict]:
     """
     批量探测账号数据.
@@ -108,7 +108,7 @@ def batch_probe(
     total = len(uids)
 
     for i in range(0, total, concurrency):
-        batch = uids[i:i + concurrency]
+        batch = uids[i : i + concurrency]
         with ThreadPoolExecutor(max_workers=len(batch)) as executor:
             futures = {executor.submit(probe_single, client, uid): uid for uid in batch}
             for future in as_completed(futures):

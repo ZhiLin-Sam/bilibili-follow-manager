@@ -55,25 +55,37 @@ class RuleEngine:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
 
         for r in data.get("keep_rules", []):
-            self.keep_rules.append(Rule(
-                name=r["name"], priority=r["priority"],
-                description=r.get("description", ""), rule_type="keep"
-            ))
+            self.keep_rules.append(
+                Rule(
+                    name=r["name"],
+                    priority=r["priority"],
+                    description=r.get("description", ""),
+                    rule_type="keep",
+                )
+            )
 
         for r in data.get("delete_rules", []):
-            self.delete_rules.append(Rule(
-                name=r["name"], priority=r["priority"],
-                description=r.get("description", ""), rule_type="delete"
-            ))
+            self.delete_rules.append(
+                Rule(
+                    name=r["name"],
+                    priority=r["priority"],
+                    description=r.get("description", ""),
+                    rule_type="delete",
+                )
+            )
 
         for r in data.get("probe_rules", []):
-            self.probe_rules.append(Rule(
-                name=r["name"], priority=r["priority"],
-                description=r.get("description", ""), rule_type="probe",
-                dimension=r.get("dimension", ""),
-                operator=r.get("operator", "eq"),
-                value=float(r.get("value", 0)),
-            ))
+            self.probe_rules.append(
+                Rule(
+                    name=r["name"],
+                    priority=r["priority"],
+                    description=r.get("description", ""),
+                    rule_type="probe",
+                    dimension=r.get("dimension", ""),
+                    operator=r.get("operator", "eq"),
+                    value=float(r.get("value", 0)),
+                )
+            )
 
         self.unfollow_config = data.get("unfollow", {})
         logger.info(

@@ -42,8 +42,7 @@ def load_cookies() -> dict | None:
 def save_cookies(cookies: dict) -> None:
     """Persist cookies to disk."""
     get_data_dir().mkdir(parents=True, exist_ok=True)
-    _cookie_path().write_text(json.dumps(cookies, ensure_ascii=False, indent=2),
-                              encoding="utf-8")
+    _cookie_path().write_text(json.dumps(cookies, ensure_ascii=False, indent=2), encoding="utf-8")
     logger.info("Cookies saved")
 
 
@@ -64,6 +63,7 @@ def print_qr_ascii(url: str) -> None:
 def get_qr_image(url: str) -> bytes:
     """Generate QR code PNG bytes for GUI display."""
     import io
+
     qr = qrcode.QRCode(border=2, box_size=8)
     qr.add_data(url)
     qr.make(fit=True)
@@ -105,10 +105,7 @@ def login_qrcode(as_image: bool = False, poll_timeout: float = 180.0):
     # Step 2: 轮询
     start = time.time()
     while time.time() - start < poll_timeout:
-        poll_resp = session.get(
-            QR_POLL_URL,
-            params={"qrcode_key": qrcode_key}
-        ).json()
+        poll_resp = session.get(QR_POLL_URL, params={"qrcode_key": qrcode_key}).json()
 
         code = poll_resp.get("data", {}).get("code", -1)
         message = poll_resp.get("data", {}).get("message", "")
@@ -141,6 +138,7 @@ def login_qrcode(as_image: bool = False, poll_timeout: float = 180.0):
 
     # 补充 dedeuserid 格式
     from contextlib import suppress
+
     with suppress(ValueError):
         cookies["DedeUserID"] = str(int(cookies["DedeUserID"]))
 

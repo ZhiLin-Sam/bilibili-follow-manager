@@ -78,20 +78,30 @@ def save_follows(follows: list[dict]) -> int:
     conn = get_conn()
     count = 0
     for f in follows:
-        conn.execute("""
+        conn.execute(
+            """
             INSERT OR REPLACE INTO follows
                 (mid, uname, sign, face, mtime, official_verify_type,
                  official_verify_desc, vip_status, vip_type, raw_json)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            f["mid"], f["uname"], f.get("sign", ""), f.get("face", ""),
-            f.get("mtime", 0),
-            f.get("official_verify", {}).get("type", 0) if isinstance(f.get("official_verify"), dict) else 0,
-            f.get("official_verify", {}).get("desc", "") if isinstance(f.get("official_verify"), dict) else "",
-            f.get("vip", {}).get("vipStatus", 0) if isinstance(f.get("vip"), dict) else 0,
-            f.get("vip", {}).get("vipType", 0) if isinstance(f.get("vip"), dict) else 0,
-            json.dumps(f, ensure_ascii=False)
-        ))
+        """,
+            (
+                f["mid"],
+                f["uname"],
+                f.get("sign", ""),
+                f.get("face", ""),
+                f.get("mtime", 0),
+                f.get("official_verify", {}).get("type", 0)
+                if isinstance(f.get("official_verify"), dict)
+                else 0,
+                f.get("official_verify", {}).get("desc", "")
+                if isinstance(f.get("official_verify"), dict)
+                else "",
+                f.get("vip", {}).get("vipStatus", 0) if isinstance(f.get("vip"), dict) else 0,
+                f.get("vip", {}).get("vipType", 0) if isinstance(f.get("vip"), dict) else 0,
+                json.dumps(f, ensure_ascii=False),
+            ),
+        )
         count += 1
     conn.commit()
     conn.close()
@@ -103,17 +113,28 @@ def save_probes(probes: list[dict]) -> int:
     now = datetime.now().isoformat()
     count = 0
     for p in probes:
-        conn.execute("""
+        conn.execute(
+            """
             INSERT OR REPLACE INTO probes
                 (mid, archive_count, video_count, follower, following,
                  like_num, total_view, total_likes, level, spacesta, ff_ratio, probe_time)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            p["uid"], p.get("archive_count", -1), p.get("video_count", -1),
-            p.get("follower", -1), p.get("following", -1),
-            p.get("like_num", -1), p.get("total_view", -1), p.get("total_likes", -1),
-            p.get("level", -1), p.get("spacesta", -999), p.get("ff_ratio", 0.0), now
-        ))
+        """,
+            (
+                p["uid"],
+                p.get("archive_count", -1),
+                p.get("video_count", -1),
+                p.get("follower", -1),
+                p.get("following", -1),
+                p.get("like_num", -1),
+                p.get("total_view", -1),
+                p.get("total_likes", -1),
+                p.get("level", -1),
+                p.get("spacesta", -999),
+                p.get("ff_ratio", 0.0),
+                now,
+            ),
+        )
         count += 1
     conn.commit()
     conn.close()
@@ -125,17 +146,25 @@ def save_verdicts(verdicts: list[dict]) -> int:
     now = datetime.now().isoformat()
     count = 0
     for v in verdicts:
-        conn.execute("""
+        conn.execute(
+            """
             INSERT OR REPLACE INTO verdicts
                 (mid, verdict, rule_keep, rule_delete, rule_probe,
                  keep_score, delete_score, reviewed_at, note)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            v["mid"], v.get("verdict", "unreviewed"),
-            v.get("rule_keep", ""), v.get("rule_delete", ""), v.get("rule_probe", ""),
-            v.get("keep_score", 0), v.get("delete_score", 0),
-            now, v.get("note", "")
-        ))
+        """,
+            (
+                v["mid"],
+                v.get("verdict", "unreviewed"),
+                v.get("rule_keep", ""),
+                v.get("rule_delete", ""),
+                v.get("rule_probe", ""),
+                v.get("keep_score", 0),
+                v.get("delete_score", 0),
+                now,
+                v.get("note", ""),
+            ),
+        )
         count += 1
     conn.commit()
     conn.close()
