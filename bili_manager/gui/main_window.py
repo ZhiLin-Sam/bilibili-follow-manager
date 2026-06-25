@@ -142,60 +142,122 @@ class BiliGUI(tk.Tk):
 
     # ── Tab: 审查 ─────────────────────────────────
 
+    REVIEW_COLUMNS = [
+        ("mid", "UID", 90),
+        ("uname", "用户名", 100),
+        ("sign", "签名", 180),
+        ("official", "认证", 60),
+        ("vip", "VIP", 40),
+        ("follower", "粉丝", 60),
+        ("archive_count", "投稿", 45),
+        ("level", "等级", 40),
+        ("total_view", "播放量", 70),
+        ("ff_ratio", "f/f比", 50),
+        ("spacesta", "封禁", 40),
+        ("mtime", "关注时间", 100),
+        ("rule_keep", "保留规则", 120),
+        ("rule_delete", "删除规则", 120),
+        ("delete_score", "删除分", 50),
+        ("verdict", "判定", 70),
+    ]
+
     def _build_review_tab(self) -> ttk.Frame:
         f = ttk.Frame(self.notebook, padding=10)
 
         # 顶部工具栏
         toolbar = ttk.Frame(f)
         toolbar.pack(fill=tk.X)
-        ttk.Label(toolbar, text="判定筛选:").pack(side=tk.LEFT)
+
+        ttk.Label(toolbar, text="判定:").pack(side=tk.LEFT)
         self.review_filter = tk.StringVar(value="all")
-        for label, val in [("全部", "all"), ("待审查", "unreviewed"), ("已标记删除", "delete"),
-                            ("已保留", "keep")]:
+        for label, val in [("全部", "all"), ("待审", "unreviewed"), ("删除", "delete"), ("保留", "keep")]:
             ttk.Radiobutton(toolbar, text=label, variable=self.review_filter, value=val,
-                            command=self._refresh_review_table).pack(side=tk.LEFT, padx=3)
+                            command=self._refresh_review_table).pack(side=tk.LEFT, padx=2)
+
+        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=8)
+        ttk.Button(toolbar, text="列显示", command=self._toggle_column_menu).pack(side=tk.LEFT, padx=3)
         ttk.Button(toolbar, text="🔄 刷新", command=self._refresh_review_table).pack(side=tk.RIGHT, padx=5)
+        ttk.Label(toolbar, textvariable=self._review_count_var()).pack(side=tk.RIGHT, padx=5)
 
         # Treeview
         tree_frame = ttk.Frame(f)
         tree_frame.pack(fill=tk.BOTH, expand=True, pady=5)
 
-        columns = ("mid", "uname", "sign", "official", "vip", "verdict", "delete_score", "probe_summary")
-        self.review_tree = ttk.Treeview(tree_frame, columns=columns, show="headings", selectmode="browse")
-        self.review_tree.heading("mid", text="UID")
-        self.review_tree.heading("uname", text="用户名")
-        self.review_tree.heading("sign", text="签名")
-        self.review_tree.heading("official", text="认证")
-        self.review_tree.heading("vip", text="VIP")
-        self.review_tree.heading("verdict", text="判定")
-        self.review_tree.heading("delete_score", text="删除分")
-        self.review_tree.heading("probe_summary", text="探测摘要")
-        self.review_tree.column("mid", width=100)
-        self.review_tree.column("uname", width=120)
-        self.review_tree.column("sign", width=200)
-        self.review_tree.column("official", width=80)
-        self.review_tree.column("vip", width=50)
-        self.review_tree.column("verdict", width=80)
-        self.review_tree.column("delete_score", width=60)
-        self.review_tree.column("probe_summary", width=250)
+        col_ids = [c[0] for c in self.REVIEW_COLUMNS]
+        self.review_tree = ttk.Treeview(tree_frame, columns=col_ids, show="headings", selectmode="extended")
+        for col_id, col_text, col_width in self.REVIEW_COLUMNS:
+            self.review_tree.heading(col_id, text=col_text)
+            self.review_tree.column(col_id, width=col_width, minwidth=30)
 
-        scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.review_tree.yview)
-        self.review_tree.configure(yscrollcommand=scrollbar.set)
-        self.review_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        h_scroll = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=self.review_tree.xview)
+        v_scroll = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.review_tree.yview)
+        self.review_tree.configure(xscrollcommand=h_scroll.set, yscrollcommand=v_scroll.set)
+        self.review_tree.grid(row=0, column=0, sticky="nsew")
+        v_scroll.grid(row=0, column=1, sticky="ns")
+        h_scroll.grid(row=1, column=0, sticky="ew")
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
+
+        # 双击查看详情
+        self.review_tree.bind("<Double-1>", self._on_review_double_click)
 
         # 判定按钮
         action_frame = ttk.Frame(f)
         action_frame.pack(fill=tk.X, pady=5)
-        ttk.Button(action_frame, text="🔴 标记删除", command=lambda: self._set_verdict("delete")).pack(
-            side=tk.LEFT, padx=3)
-        ttk.Button(action_frame, text="🟢 标记保留", command=lambda: self._set_verdict("keep")).pack(
-            side=tk.LEFT, padx=3)
-        ttk.Button(action_frame, text="⬜ 取消标记", command=lambda: self._set_verdict("unreviewed")).pack(
-            side=tk.LEFT, padx=3)
-        ttk.Button(action_frame, text="💾 批量保存", command=self._save_all_verdicts).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(action_frame, text="🔴 标记删除", command=lambda: self._set_verdict("delete")).pack(side=tk.LEFT, padx=3)
+        ttk.Button(action_frame, text="🟢 标记保留", command=lambda: self._set_verdict("keep")).pack(side=tk.LEFT, padx=3)
+        ttk.Button(action_frame, text="⬜ 取消标记", command=lambda: self._set_verdict("unreviewed")).pack(side=tk.LEFT, padx=3)
+        ttk.Button(action_frame, text="💾 保存", command=self._save_all_verdicts).pack(side=tk.RIGHT, padx=5)
+
+        # 默认列可见性
+        self._col_visible = {c[0]: tk.BooleanVar(value=True) for c in self.REVIEW_COLUMNS}
+        # 隐藏较次要的列
+        self._col_visible["rule_keep"].set(False)
+        self._col_visible["rule_delete"].set(False)
+        self._col_visible["ff_ratio"].set(False)
+        self._col_visible["mtime"].set(False)
 
         return f
+
+    def _review_count_var(self):
+        if not hasattr(self, '_review_count_sv'):
+            self._review_count_sv = tk.StringVar(value="")
+        return self._review_count_sv
+
+    def _toggle_column_menu(self):
+        menu = tk.Menu(self, tearoff=0)
+        for col_id, col_text, _ in self.REVIEW_COLUMNS:
+            menu.add_checkbutton(label=col_text, variable=self._col_visible[col_id],
+                                 command=self._refresh_review_table)
+        menu.post(self.winfo_pointerx(), self.winfo_pointery())
+
+    def _on_review_double_click(self, event):
+        sel = self.review_tree.selection()
+        if not sel:
+            return
+        item = sel[0]
+        values = self.review_tree.item(item)["values"]
+        col_ids = [c[0] for c in self.REVIEW_COLUMNS]
+        data = dict(zip(col_ids, values))
+
+        detail = f"""UID: {data.get('mid', '')}
+用户名: {data.get('uname', '')}
+签名: {data.get('sign', '')}
+认证: {data.get('official', '')}
+VIP: {data.get('vip', '')}
+粉丝: {data.get('follower', '')}
+投稿: {data.get('archive_count', '')}
+等级: {data.get('level', '')}
+播放量: {data.get('total_view', '')}
+f/f比: {data.get('ff_ratio', '')}
+封禁: {data.get('spacesta', '')}
+关注时间: {data.get('mtime', '')}
+保留规则: {data.get('rule_keep', '')}
+删除规则: {data.get('rule_delete', '')}
+删除分: {data.get('delete_score', '')}
+判定: {data.get('verdict', '')}
+空间: https://space.bilibili.com/{data.get('mid', '')}"""
+        messagebox.showinfo(f"账号详情: {data.get('uname', '')}", detail)
 
     # ── Tab: 取关 ─────────────────────────────────
 
@@ -315,6 +377,8 @@ class BiliGUI(tk.Tk):
                 count = database.save_follows(follows)
                 self.after(0, lambda: self.fetch_label.set(f"完成! 共 {len(follows)}/{total} 条"))
                 self.after(0, lambda: self.log(f"关注列表已保存: {count} 条到数据库"))
+                self.after(0, self._refresh_review_table)
+                self.after(0, self._refresh_stats)
             except Exception as e:
                 self.after(0, lambda: self.log(f"拉取失败: {e}"))
 
@@ -361,6 +425,7 @@ class BiliGUI(tk.Tk):
 
         database.save_verdicts(verdicts)
         self._refresh_stats()
+        self._refresh_review_table()
         self.log(f"规则已应用: {len(verdicts)} 条判定已保存")
 
     def _deep_probe(self):
@@ -434,6 +499,7 @@ class BiliGUI(tk.Tk):
                 self.after(0, lambda: self.log(
                     f"深度探测完成: {len(results)} 条, 已更新判定"))
                 self._refresh_stats()
+                self.after(0, self._refresh_review_table)
             except Exception as e:
                 self.after(0, lambda: self.log(f"探测失败: {e}"))
 
@@ -461,36 +527,55 @@ class BiliGUI(tk.Tk):
         except Exception:
             return
 
+        col_ids = [c[0] for c in self.REVIEW_COLUMNS]
+
         for d in data:
-            official = "✓" if d.get("official_verify_type", 0) > 0 else ""
-            vip = "✓" if d.get("vip_status", 0) == 1 else ""
-            verdict = d.get("verdict", "unreviewed")
-            verdict_display = {"keep": "🟢 保留", "delete": "🔴 删除"}.get(verdict, "⬜ 待审")
+            official = (d.get("official_verify_type") or 0) > 0
+            vip = (d.get("vip_status") or 0) == 1
+            spacesta = d.get("spacesta")
+            spacesta_str = "封禁" if spacesta == -2 else ("正常" if spacesta == 0 else "?")
+            lv = d.get("level") or -1
+            ac = d.get("archive_count") or -1
+            ff = d.get("ff_ratio") or 0
+            follower = d.get("probe_follower") or -1
+            total_view = d.get("total_view") or -1
 
-            # 探测摘要
-            tags = []
-            if d.get("spacesta") == -2:
-                tags.append("封禁")
-            lv = d.get("level", -1)
-            ac = d.get("archive_count", -1)
-            ff = d.get("ff_ratio", 0)
-            if lv >= 0:
-                tags.append(f"LV{lv}")
-            if ac >= 0:
-                tags.append(f"投稿{ac}")
-            if ff >= 2:
-                tags.append(f"f/f={ff:.1f}")
-            probe_summary = ", ".join(tags)
+            mtime_ts = d.get("mtime") or 0
+            if mtime_ts > 0:
+                mtime_str = time.strftime("%Y-%m-%d", time.localtime(mtime_ts))
+            else:
+                mtime_str = ""
 
-            self.review_tree.insert("", tk.END, values=(
-                d["mid"], d.get("uname", ""),
-                (d.get("sign", "") or "")[:40],
-                official, vip,
-                verdict_display,
-                d.get("delete_score", 0),
-                probe_summary
-            ))
+            verdict = d.get("verdict") or "unreviewed"
+            verdict_display = {"keep": "保留", "delete": "删除"}.get(verdict, "待审")
 
+            values_map = {
+                "mid": str(d["mid"]),
+                "uname": d.get("uname") or "",
+                "sign": (d.get("sign") or "")[:40],
+                "official": "✓" if official else "",
+                "vip": "✓" if vip else "",
+                "follower": str(follower) if follower >= 0 else "",
+                "archive_count": str(ac) if ac >= 0 else "",
+                "level": str(lv) if lv >= 0 else "",
+                "total_view": str(total_view) if total_view >= 0 else "",
+                "ff_ratio": f"{ff:.1f}" if ff >= 1.5 else "",
+                "spacesta": spacesta_str,
+                "mtime": mtime_str,
+                "rule_keep": (d.get("rule_keep") or "")[:30],
+                "rule_delete": (d.get("rule_delete") or "")[:30],
+                "delete_score": str(d.get("delete_score") or 0),
+                "verdict": verdict_display,
+            }
+
+            values = tuple(values_map.get(c, "") for c in col_ids)
+            self.review_tree.insert("", tk.END, values=values)
+
+        # 应用列可见性
+        visible_cols = [c for c in col_ids if self._col_visible.get(c) and self._col_visible[c].get()]
+        self.review_tree.configure(displaycolumns=visible_cols)
+
+        self._review_count_var().set(f"共 {len(data)} 条")
         self.log(f"审查表格已刷新: {len(data)} 条")
 
     def _set_verdict(self, verdict: str):
