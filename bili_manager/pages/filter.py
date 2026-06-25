@@ -4,11 +4,10 @@ import threading
 import tkinter as tk
 import tkinter.ttk as ttk
 
-from .base import BasePage
 from .. import pages as page_registry
-from ..db import database
 from ..api.account import batch_probe
-from ..theme import BG0
+from ..db import database
+from .base import BasePage
 
 
 @page_registry.register_page
@@ -66,7 +65,6 @@ class FilterPage(BasePage):
         self.log("正在停止...")
 
     def _apply_rules(self):
-        from .review import ReviewPage
         conn = database.get_conn()
         rows = conn.execute("SELECT * FROM follows").fetchall()
         conn.close()
@@ -178,8 +176,8 @@ class FilterPage(BasePage):
                 ])
             except RuntimeError:
                 self.app.ui_call(lambda: self.log("探测已停止"))
-            except Exception as e:
-                self.app.ui_call(lambda: self.log(f"探测失败: {e}"))
+            except Exception as ex:
+                self.app.ui_call(lambda e=ex: self.log(f"探测失败: {e}"))
             finally:
                 self.app.ui_call(lambda: [
                     self.progress.configure(value=0),

@@ -4,17 +4,15 @@ from __future__ import annotations
 
 import tkinter as tk
 import tkinter.ttk as ttk
-import threading
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 # Pillow 几何图标工具
 from PIL import Image, ImageDraw, ImageTk
 
-from .theme import apply_theme, BG0, BG1, BG2, FG0, FG1, ACCENT, RED, GREEN
 from .db import database
 from .rules.engine import RuleEngine
-from .utils.helpers import logger, get_data_dir
+from .theme import ACCENT, BG0, BG1, FG0, FG1, RED, apply_theme
+from .utils.helpers import logger
 
 if TYPE_CHECKING:
     from .pages.base import BasePage
@@ -219,7 +217,7 @@ class BiliApp(tk.Tk):
         btn = ttk.Button(
             self.sidebar, text=f"  {text}", image=photo, compound=tk.LEFT,
             style="Sidebar.TButton",
-            command=lambda pid=page_id: self.switch_page(pid)
+            command=lambda pid=page_id: self._switch_page_cmd(pid)
         )
         btn.pack(fill=tk.X, padx=6, pady=1)
         self._sidebar_btns[page_id] = btn
@@ -239,6 +237,10 @@ class BiliApp(tk.Tk):
         self._collapsed = not self._collapsed
 
     # ── 页面切换 ────────────────────────
+
+    def _switch_page_cmd(self, page_id: str) -> None:
+        """侧边栏按钮回调包装 (避免 lambda 类型推断问题)"""
+        self.switch_page(page_id)
 
     def switch_page(self, page_id: str) -> None:
         """切换到指定页面"""

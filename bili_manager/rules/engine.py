@@ -2,10 +2,10 @@
 
 import re
 import tomllib
-from pathlib import Path
 from dataclasses import dataclass, field
+from pathlib import Path
 
-from ..utils.helpers import logger, get_config_dir
+from ..utils.helpers import get_config_dir, logger
 
 DEFAULT_RULES_PATH = get_config_dir() / "default_rules.toml"
 
@@ -110,8 +110,8 @@ class RuleEngine:
 
         marketing_score = 0
         creator_score = 0
-        m_tags = []
-        c_tags = []
+        m_tags: list[str] = []
+        c_tags: list[str] = []
 
         # 降权: 商务合作类关键词降低营销权重
         has_contact = bool(self.contact_pattern.search(text))

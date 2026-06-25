@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import tkinter as tk
 import tkinter.ttk as ttk
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING

@@ -1,8 +1,9 @@
 """HTTP 客户端 — 统一的 cookie/session 管理"""
 
 import time
-import requests
 from typing import Any
+
+import requests
 
 from ..utils.helpers import logger
 

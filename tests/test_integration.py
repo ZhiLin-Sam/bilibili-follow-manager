@@ -1,9 +1,10 @@
 """集成测试: 规则引擎 + 数据库"""
 import sys
+
 sys.path.insert(0, "..")
 
-from bili_manager.rules.engine import RuleEngine
 from bili_manager.db import database
+from bili_manager.rules.engine import RuleEngine
 
 database.init_db()
 

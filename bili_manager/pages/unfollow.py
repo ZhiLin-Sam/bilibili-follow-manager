@@ -5,11 +5,11 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import messagebox
 
-from .base import BasePage
 from .. import pages as page_registry
-from ..db import database
 from ..api.unfollow import batch_unfollow
-from ..theme import BG0, BG1, BG2, FG0, FG1, ACCENT, RED, GREEN
+from ..db import database
+from ..theme import ACCENT, BG2, FG0
+from .base import BasePage
 
 
 @page_registry.register_page
@@ -178,7 +178,7 @@ class UnfollowPage(BasePage):
             return
 
         lines = [self.unfollow_list.get(i) for i in sel]
-        uids = [l.split()[0] for l in lines]
+        uids = [line.split()[0] for line in lines]
         count = len(uids)
 
         if not messagebox.askyesno("最终确认", f"即将取消关注 {count} 个账号，不可撤销。\n\n确认执行？"):
@@ -218,8 +218,8 @@ class UnfollowPage(BasePage):
                 ])
             except RuntimeError:
                 self.app.ui_call(lambda: self.log("取关已停止"))
-            except Exception as e:
-                self.app.ui_call(lambda: self.log(f"取关异常: {e}"))
+            except Exception as ex:
+                self.app.ui_call(lambda e=ex: self.log(f"取关异常: {e}"))
             finally:
                 self.app.ui_call(lambda: [
                     self.progress.configure(value=0),

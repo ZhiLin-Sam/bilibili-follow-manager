@@ -4,11 +4,10 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import messagebox
 
-from .base import BasePage
 from .. import pages as page_registry
 from ..db import database
-from ..theme import BG0, BG1, BG2, FG0, FG1, ACCENT, GREEN, RED, YELLOW
-
+from ..theme import ACCENT, BG0, BG2, FG0, GREEN, RED, YELLOW
+from .base import BasePage
 
 # 8 核心列定义
 CORE_COLS = [
@@ -92,7 +91,7 @@ class ReviewPage(BasePage):
                                   selectmode="extended")
         for col_id, col_name, col_width in CORE_COLS:
             self.tree.heading(col_id, text=col_name,
-                              command=lambda c=col_id: self._sort(c))
+                              command=lambda c=col_id: self._sort_by_col(c))
             self.tree.column(col_id, width=col_width, minwidth=40, stretch=col_id in ("sign",))
 
         # 滚动条
@@ -116,9 +115,9 @@ class ReviewPage(BasePage):
         self.tree.tag_configure("protected", foreground=ACCENT)
         self.tree.tag_configure("unreviewed", foreground=YELLOW)
 
-        self._sort_col = None
+        self._sort_col: str | None = None
         self._sort_asc = True
-        self._all_data = []
+        self._all_data: list[dict] = []
 
         self._refresh()
 
@@ -160,10 +159,7 @@ class ReviewPage(BasePage):
                     continue
 
             verdict_disp = {"keep": "保留", "delete": "删除", "protected": "保护⭐"}.get(verdict, "待审")
-            vip = "月度" if row.get("vip_type", 0) == 1 else ("年度" if row.get("vip_type", 0) == 2 else "")
             official = row.get("official_verify_desc", "") or ""
-            spacesta_map = {-2: "封禁", 0: "正常", -999: "未探"}
-            spacesta_disp = spacesta_map.get(row.get("spacesta"), str(row.get("spacesta", "")))
 
             vals = {
                 "mid": row["mid"],
@@ -176,13 +172,17 @@ class ReviewPage(BasePage):
                 "follower": row.get("probe_follower", -1) if row.get("probe_follower", -1) != -1 else "?",
             }
             item_vals = [vals.get(c[0], "") for c in CORE_COLS]
-            tree_id = self.tree.insert("", tk.END, values=item_vals, tags=(verdict,))
+            self.tree.insert("", tk.END, values=item_vals, tags=(verdict,))
 
         # 排序
         if self._sort_col:
             self._sort(self._sort_col)
 
     # ── 排序 ──
+
+    def _sort_by_col(self, col: str) -> None:
+        """排序回调包装 (避免 lambda 类型推断问题)"""
+        self._sort(col)
 
     def _sort(self, col: str):
         if self._sort_col == col:
@@ -191,7 +191,8 @@ class ReviewPage(BasePage):
             self._sort_col = col
             self._sort_asc = True
 
-        items = [(self.tree.set(k, col), k) for k in self.tree.get_children("")]
+        sort_col: str = col
+        items = [(self.tree.set(k, sort_col), k) for k in self.tree.get_children("")]
         try:
             items.sort(key=lambda x: float(x[0]) if x[0].replace(".", "").replace("-", "").isdigit() else x[0],
                        reverse=not self._sort_asc)
@@ -235,11 +236,11 @@ class ReviewPage(BasePage):
         dlg.transient(self.app)
         dlg.configure(bg=BG0)
 
-        cols = [c[0] for c in CORE_COLS] + [c[0] for c in EXTRA_COLS]
-        all_names = {c[0]: c[1] for c in ALL_COLS}
         tree = ttk.Treeview(dlg, columns=["field", "value"], show="headings")
-        tree.heading("field", text="字段"); tree.heading("value", text="值")
-        tree.column("field", width=120); tree.column("value", width=250)
+        tree.heading("field", text="字段")
+        tree.heading("value", text="值")
+        tree.column("field", width=120)
+        tree.column("value", width=250)
         tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         sel = self.tree.selection()
@@ -261,7 +262,6 @@ class ReviewPage(BasePage):
 
     def _export_csv(self):
         import csv
-        from pathlib import Path
         from tkinter import filedialog
 
         fp = filedialog.asksaveasfilename(defaultextension=".csv",
@@ -315,7 +315,7 @@ class ReviewPage(BasePage):
                     break
 
         if rejected:
-            messagebox.showwarning("保护中", f"以下账号已锁定保护:\n" + "\n".join(rejected))
+            messagebox.showwarning("保护中", "以下账号已锁定保护:\n" + "\n".join(rejected))
         self._update_count()
         self.log(f"已标记 {changed} 条 → {verdict}" +
                  (f" ({len(rejected)} 条被保护拒绝)" if rejected else ""))

@@ -3,8 +3,8 @@
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from .client import BiliClient
 from ..utils.helpers import logger
+from .client import BiliClient
 
 CARD_URL = "https://api.bilibili.com/x/web-interface/card"
 RELATION_STAT_URL = "https://api.bilibili.com/x/relation/stat"
@@ -72,9 +72,11 @@ def probe_single(client: BiliClient, uid: str) -> dict:
         logger.debug(f"navnum API failed for {uid}: {e}")
 
     # 计算关注/粉丝比
-    if result["follower"] > 0 and result["following"] > 0:
-        result["ff_ratio"] = round(result["following"] / result["follower"], 2)
-    elif result["follower"] == 0 and result["following"] > 50:
+    follower = int(result.get("follower", 0) or 0)
+    following = int(result.get("following", 0) or 0)
+    if follower > 0 and following > 0:
+        result["ff_ratio"] = round(following / follower, 2)
+    elif follower == 0 and following > 50:
         result["ff_ratio"] = 999.0
     else:
         result["ff_ratio"] = 0.0

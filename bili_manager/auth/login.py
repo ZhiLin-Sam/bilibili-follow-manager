@@ -2,12 +2,12 @@
 
 import json
 import time
-import qrcode
-
-import requests
 from pathlib import Path
 
-from ..utils.helpers import logger, get_data_dir
+import qrcode
+import requests
+
+from ..utils.helpers import get_data_dir, logger
 
 QR_GENERATE_URL = "https://passport.bilibili.com/x/passport-login/web/qrcode/generate"
 QR_POLL_URL = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll"
@@ -120,7 +120,7 @@ def login_qrcode(as_image: bool = False, poll_timeout: float = 180.0):
             raise RuntimeError("二维码已过期, 请重新获取")
         elif code == 86090:
             if not as_image:
-                print(f"\r状态: 已扫码, 请在手机上确认...", end="")
+                print("\r状态: 已扫码, 请在手机上确认...", end="")
         elif code == 86101:
             pass  # 等待扫码
         else:
@@ -140,11 +140,9 @@ def login_qrcode(as_image: bool = False, poll_timeout: float = 180.0):
         raise RuntimeError(f"登录未完成, 缺少必要 cookie: {missing}")
 
     # 补充 dedeuserid 格式
-    if "DedeUserID" in cookies:
-        try:
-            cookies["DedeUserID"] = str(int(cookies["DedeUserID"]))
-        except ValueError:
-            pass
+    from contextlib import suppress
+    with suppress(ValueError):
+        cookies["DedeUserID"] = str(int(cookies["DedeUserID"]))
 
     save_cookies(cookies)
     return cookies, qr_data

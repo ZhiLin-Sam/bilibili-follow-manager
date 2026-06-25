@@ -1,10 +1,9 @@
 """粉丝分析页面 (占位)"""
 
-import tkinter as tk
 import tkinter.ttk as ttk
 
-from .base import BasePage
 from .. import pages as page_registry
+from .base import BasePage
 
 
 @page_registry.register_page

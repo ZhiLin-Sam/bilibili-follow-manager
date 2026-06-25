@@ -1,11 +1,10 @@
 """SQLite 数据库 — 关注数据持久化"""
 
-import sqlite3
 import json
+import sqlite3
 from datetime import datetime
-from pathlib import Path
 
-from ..utils.helpers import logger, get_data_dir
+from ..utils.helpers import get_data_dir, logger
 
 DB_PATH = get_data_dir() / "bili_follows.db"
 

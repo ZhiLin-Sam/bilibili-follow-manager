@@ -2,8 +2,8 @@
 
 import time
 
-from .client import BiliClient
 from ..utils.helpers import logger
+from .client import BiliClient
 
 UNFOLLOW_URL = "https://api.bilibili.com/x/relation/modify"
 

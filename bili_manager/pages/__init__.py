@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .base import BasePage
 
-_registry: dict[str, type["BasePage"]] = {}
+_registry: dict[str, type[BasePage]] = {}
 
 
-def register_page(page_cls: type["BasePage"]) -> type["BasePage"]:
+def register_page(page_cls: type[BasePage]) -> type[BasePage]:
     """装饰器: 将页面类注册到全局注册表"""
     _registry[page_cls.page_id] = page_cls
     return page_cls
@@ -28,10 +28,10 @@ def discover_pages() -> None:
         importlib.import_module(f".{name}", package=__package__)
 
 
-def get_pages() -> list[type["BasePage"]]:
+def get_pages() -> list[type[BasePage]]:
     """按 order 排序的已注册页面列表"""
     return sorted(_registry.values(), key=lambda p: p.order)
 
 
-def get_page(page_id: str) -> type["BasePage"] | None:
+def get_page(page_id: str) -> type[BasePage] | None:
     return _registry.get(page_id)

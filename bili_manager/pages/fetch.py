@@ -1,26 +1,25 @@
 """拉取页面 — 扫码登录 + 拉取关注列表"""
 
-import json
 import threading
 import tkinter as tk
 import tkinter.ttk as ttk
 from io import BytesIO
-from pathlib import Path
 
-from PIL import Image, ImageTk
 import qrcode
+import requests
+from PIL import Image, ImageTk
 
-from .base import BasePage
 from .. import pages as page_registry
-from ..auth.login import (
-    login_qrcode, load_cookies, save_cookies, get_qr_image, QR_GENERATE_URL,
-)
 from ..api.client import BiliClient
 from ..api.following import fetch_all_followings
+from ..auth.login import (
+    QR_GENERATE_URL,
+    load_cookies,
+    save_cookies,
+)
 from ..db import database
-from ..theme import BG0, BG1, BG2, FG0, FG1, ACCENT, GREEN, RED
-
-import requests
+from ..theme import BG0
+from .base import BasePage
 
 
 @page_registry.register_page
@@ -126,7 +125,7 @@ class FetchPage(BasePage):
         qr_label.pack(pady=5)
 
         # 获取二维码 URL
-        HEADERS = {
+        headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                           "AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
             "Referer": "https://www.bilibili.com/",
@@ -135,7 +134,7 @@ class FetchPage(BasePage):
         def _poll():
             try:
                 session = requests.Session()
-                session.headers.update(HEADERS)
+                session.headers.update(headers)
                 resp = session.get(QR_GENERATE_URL).json()
                 if resp.get("code") != 0:
                     self.app.ui_call(lambda: status.set(f"生成失败: {resp}"))
@@ -177,13 +176,13 @@ class FetchPage(BasePage):
                         for c in session.cookies:
                             cookies[c.name] = c.value
                         if "DedeUserID" in cookies:
-                            try:
+                            from contextlib import suppress
+                            with suppress(ValueError):
                                 cookies["DedeUserID"] = str(int(cookies["DedeUserID"]))
-                            except ValueError:
-                                pass
                         save_cookies(cookies)
-                        self.app.ui_call(lambda: [
-                            self._on_login_success(cookies),
+                        _cookies = cookies
+                        self.app.ui_call(lambda c=_cookies: [
+                            self._on_login_success(c),
                             dlg.destroy()
                         ])
                         return
@@ -195,8 +194,8 @@ class FetchPage(BasePage):
                     time.sleep(2)
 
                 self.app.ui_call(lambda: status.set("登录超时"))
-            except Exception as e:
-                self.app.ui_call(lambda: status.set(f"错误: {e}"))
+            except Exception as ex:
+                self.app.ui_call(lambda e=ex: status.set(f"错误: {e}"))
 
         threading.Thread(target=_poll, daemon=True).start()
 
@@ -257,8 +256,8 @@ class FetchPage(BasePage):
                 ])
             except RuntimeError:
                 self.app.ui_call(lambda: self.log("拉取已停止"))
-            except Exception as e:
-                self.app.ui_call(lambda: self.log(f"拉取失败: {e}"))
+            except Exception as ex:
+                self.app.ui_call(lambda e=ex: self.log(f"拉取失败: {e}"))
             finally:
                 self.app.ui_call(lambda: [
                     self.progress.configure(value=0),
@@ -291,7 +290,9 @@ class FetchPage(BasePage):
                     if not items:
                         break
                     if not isinstance(items, list):
-                        self.app.ui_call(lambda: self.log(f"特别关注API返回异常格式: {type(items)}"))
+                        _items = items
+                        self.app.ui_call(lambda it=_items: self.log(
+                            f"特别关注API返回异常格式: {type(it)}"))
                         break
                     for u in items:
                         if isinstance(u, dict) and "mid" in u:

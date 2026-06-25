@@ -1,10 +1,9 @@
 """关注列表 API"""
 
 import time
-from typing import Generator
 
-from .client import BiliClient
 from ..utils.helpers import logger
+from .client import BiliClient
 
 FOLLOWING_URL = "https://api.bilibili.com/x/relation/followings"
 
