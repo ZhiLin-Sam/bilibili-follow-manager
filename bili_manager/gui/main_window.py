@@ -20,7 +20,7 @@ from ..utils.helpers import logger, setup_logging, get_data_dir
 class BiliGUI(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Bilibili 关注管理器 v0.1")
+        self.title("Bilibili 关注管理器 v0.2")
         self.geometry("1200x750")
         self.minsize(900, 600)
 
@@ -28,6 +28,7 @@ class BiliGUI(tk.Tk):
         self.rule_engine = RuleEngine()
         self.follows: list[dict] = []
         self.probes: list[dict] = []
+        self._review_data: list[dict] = []
 
         self._build_ui()
         self._init_db()
@@ -129,7 +130,9 @@ class BiliGUI(tk.Tk):
         btns = ttk.Frame(f)
         btns.pack(fill=tk.X, pady=10)
         ttk.Button(btns, text="⚙ 应用签名规则", command=self._apply_rules).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btns, text="📝 自定义规则", command=self._open_custom_rules_dialog).pack(side=tk.LEFT, padx=5)
         ttk.Button(btns, text="🔬 深层探测可疑账号", command=self._deep_probe).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btns, text="🔧 自定义API", command=self._open_custom_api_dialog).pack(side=tk.LEFT, padx=5)
         ttk.Button(btns, text="📊 刷新统计", command=self._refresh_stats).pack(side=tk.LEFT, padx=5)
 
         self.filter_progress = ttk.Progressbar(f, mode="determinate")
@@ -147,7 +150,7 @@ class BiliGUI(tk.Tk):
         ("uname", "用户名", 100),
         ("sign", "签名", 180),
         ("official", "认证", 60),
-        ("vip", "VIP", 40),
+        ("vip", "大会员", 50),
         ("follower", "粉丝", 60),
         ("archive_count", "投稿", 45),
         ("level", "等级", 40),
@@ -174,6 +177,11 @@ class BiliGUI(tk.Tk):
             ttk.Radiobutton(toolbar, text=label, variable=self.review_filter, value=val,
                             command=self._refresh_review_table).pack(side=tk.LEFT, padx=2)
 
+        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=8)
+        ttk.Label(toolbar, text="搜索:").pack(side=tk.LEFT)
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add("write", lambda *a: self._search_review_table())
+        ttk.Entry(toolbar, textvariable=self.search_var, width=18).pack(side=tk.LEFT, padx=2)
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=8)
         ttk.Button(toolbar, text="列显示", command=self._toggle_column_menu).pack(side=tk.LEFT, padx=3)
         ttk.Button(toolbar, text="🔄 刷新", command=self._refresh_review_table).pack(side=tk.RIGHT, padx=5)
@@ -206,6 +214,7 @@ class BiliGUI(tk.Tk):
         action_frame.pack(fill=tk.X, pady=5)
         ttk.Button(action_frame, text="🔴 标记删除", command=lambda: self._set_verdict("delete")).pack(side=tk.LEFT, padx=3)
         ttk.Button(action_frame, text="🟢 标记保留", command=lambda: self._set_verdict("keep")).pack(side=tk.LEFT, padx=3)
+        ttk.Button(action_frame, text="🔒 保护", command=lambda: self._set_verdict("protected")).pack(side=tk.LEFT, padx=3)
         ttk.Button(action_frame, text="⬜ 取消标记", command=lambda: self._set_verdict("unreviewed")).pack(side=tk.LEFT, padx=3)
         ttk.Button(action_frame, text="💾 保存", command=self._save_all_verdicts).pack(side=tk.RIGHT, padx=5)
 
@@ -406,8 +415,10 @@ f/f比: {data.get('ff_ratio', '')}
 
             result = engine.evaluate_signature(f, official_type, is_vip)
 
-            # 判定
-            if result.keep_score >= result.delete_score:
+            # 认证账号自动保护
+            if official_type > 0:
+                verdict = "protected"
+            elif result.keep_score >= result.delete_score:
                 verdict = "keep"
             elif result.delete_score >= 40:
                 verdict = "delete"
@@ -423,6 +434,8 @@ f/f比: {data.get('ff_ratio', '')}
                 "delete_score": result.delete_score,
             })
 
+        # 同时应用自定义规则
+        self._apply_custom_rules()
         database.save_verdicts(verdicts)
         self._refresh_stats()
         self._refresh_review_table()
@@ -515,23 +528,37 @@ f/f比: {data.get('ff_ratio', '')}
     # ── 审查 ─────────────────────────────────────
 
     def _refresh_review_table(self):
-        for row in self.review_tree.get_children():
-            self.review_tree.delete(row)
-
         verdict_filter = self.review_filter.get()
         if verdict_filter == "all":
             verdict_filter = None
-
         try:
             data = database.get_all_with_verdicts(verdict_filter)
         except Exception:
             return
+        self._review_data = data
+        self._search_review_table()
+
+    def _search_review_table(self):
+        text = self.search_var.get().lower().strip()
+        if text:
+            data = [d for d in self._review_data
+                    if text in str(d.get("mid", ""))
+                    or text in (d.get("uname") or "").lower()
+                    or text in ((d.get("sign") or "").lower())]
+        else:
+            data = self._review_data
+        self._rebuild_tree(data)
+
+    def _rebuild_tree(self, data):
+        for row in self.review_tree.get_children():
+            self.review_tree.delete(row)
 
         col_ids = [c[0] for c in self.REVIEW_COLUMNS]
 
         for d in data:
             official = (d.get("official_verify_type") or 0) > 0
-            vip = (d.get("vip_status") or 0) == 1
+            vip_status = (d.get("vip_status") or 0)
+            vip_type = d.get("vip_type") or 0
             spacesta = d.get("spacesta")
             spacesta_str = "封禁" if spacesta == -2 else ("正常" if spacesta == 0 else "?")
             lv = d.get("level") or -1
@@ -547,14 +574,14 @@ f/f比: {data.get('ff_ratio', '')}
                 mtime_str = ""
 
             verdict = d.get("verdict") or "unreviewed"
-            verdict_display = {"keep": "保留", "delete": "删除"}.get(verdict, "待审")
+            verdict_display = {"keep": "保留", "delete": "删除", "protected": "🔒保护"}.get(verdict, "待审")
 
             values_map = {
                 "mid": str(d["mid"]),
                 "uname": d.get("uname") or "",
                 "sign": (d.get("sign") or "")[:40],
                 "official": "✓" if official else "",
-                "vip": "✓" if vip else "",
+                "vip": {1: "月度", 2: "年度"}.get(vip_type, "") if vip_status else "",
                 "follower": str(follower) if follower >= 0 else "",
                 "archive_count": str(ac) if ac >= 0 else "",
                 "level": str(lv) if lv >= 0 else "",
@@ -576,21 +603,321 @@ f/f比: {data.get('ff_ratio', '')}
         self.review_tree.configure(displaycolumns=visible_cols)
 
         self._review_count_var().set(f"共 {len(data)} 条")
-        self.log(f"审查表格已刷新: {len(data)} 条")
 
     def _set_verdict(self, verdict: str):
         sel = self.review_tree.selection()
         if not sel:
             return
+        rejected = []
         for item in sel:
             mid = self.review_tree.item(item)["values"][0]
+            # 查找此行的当前判定
+            conn = database.get_conn()
+            row = conn.execute("SELECT verdict FROM verdicts WHERE mid = ?", (mid,)).fetchone()
+            conn.close()
+            current = row["verdict"] if row else "unreviewed"
+            if current == "protected" and verdict == "delete":
+                rejected.append(
+                    self.review_tree.item(item)["values"][1]  # uname
+                )
+                continue
             database.save_verdicts([{"mid": mid, "verdict": verdict}])
+        if rejected:
+            messagebox.showwarning("保护中", f"以下账号已锁定保护，不可标记为删除:\n" + "\n".join(rejected))
         self._refresh_review_table()
-        self.log(f"已标记 {len(sel)} 条 → {verdict}")
+        self.log(f"已标记 {len(sel) - len(rejected)} 条 → {verdict}" + (
+            f" ({len(rejected)} 条被保护拒绝)" if rejected else ""))
 
     def _save_all_verdicts(self):
-        database.save_verdicts([])  # trigger save (already saved per-item)
+        database.save_verdicts([])
         self.log("判定已持久化")
+
+    # ── 自定义规则对话框 ──────────────────────────
+
+    def _get_custom_rules_path(self):
+        from ..utils.helpers import get_data_dir
+        return get_data_dir() / "custom_rules.toml"
+
+    def _load_custom_rules(self) -> list[dict]:
+        p = self._get_custom_rules_path()
+        if not p.exists():
+            return []
+        import tomllib as _tl
+        try:
+            with open(p, "rb") as f:
+                data = _tl.load(f)
+            return data.get("rule", [])
+        except Exception:
+            return []
+
+    def _save_custom_rules(self, rules: list[dict]):
+        p = self._get_custom_rules_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        import tomllib as _tl  # noqa (just for the file; write manually)
+        lines = ["# 自定义删除规则 — 格式: [[rule]]\n"]
+        for r in rules:
+            lines.append("[[rule]]\n")
+            lines.append(f'name = "{r["name"]}"\n')
+            lines.append(f'field = "{r["field"]}"\n')
+            lines.append(f'pattern = """{r["pattern"]}"""\n')
+            lines.append(f'score = {r["score"]}\n\n')
+        p.write_text("".join(lines), encoding="utf-8")
+
+    def _apply_custom_rules(self):
+        rules = self._load_custom_rules()
+        if not rules:
+            return
+        import re as _re
+        conn = database.get_conn()
+        follows = conn.execute("SELECT mid, uname, sign FROM follows").fetchall()
+        conn.close()
+        for frow in follows:
+            mid = frow["mid"]
+            uname = frow["uname"] or ""
+            sign = frow["sign"] or ""
+            for r in rules:
+                field = r.get("field", "both")
+                pat = r.get("pattern", "")
+                name = r.get("name", "")
+                score = r.get("score", 20)
+                if not pat:
+                    continue
+                text = ""
+                if field == "uname":
+                    text = uname
+                elif field == "sign":
+                    text = sign
+                else:
+                    text = f"{uname} {sign}"
+                try:
+                    if _re.search(pat, text, _re.IGNORECASE):
+                        conn2 = database.get_conn()
+                        existing = conn2.execute(
+                            "SELECT delete_score, rule_delete FROM verdicts WHERE mid = ?",
+                            (mid,)
+                        ).fetchone()
+                        old_score = existing["delete_score"] or 0 if existing else 0
+                        old_rules = existing["rule_delete"] or "" if existing else ""
+                        new_rules = old_rules + ("," if old_rules else "") + f"[自定义]{name}"
+                        conn2.execute(
+                            "INSERT OR REPLACE INTO verdicts (mid, verdict, delete_score, rule_delete, keep_score) "
+                            "VALUES (?, 'delete', ?, ?, 0)",
+                            (mid, old_score + score, new_rules)
+                        )
+                        conn2.commit()
+                        conn2.close()
+                except _re.error:
+                    self.log(f"自定义规则正则错误: {name} — {pat}")
+
+    def _open_custom_rules_dialog(self):
+        rules = self._load_custom_rules()
+        dlg = tk.Toplevel(self)
+        dlg.title("自定义规则")
+        dlg.geometry("700x400")
+        dlg.transient(self)
+
+        tree_frame = ttk.Frame(dlg)
+        tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        cols = ("name", "field", "pattern", "score")
+        tree = ttk.Treeview(tree_frame, columns=cols, show="headings")
+        tree.heading("name", text="名称")
+        tree.heading("field", text="匹配字段")
+        tree.heading("pattern", text="正则")
+        tree.heading("score", text="分数")
+        tree.column("name", width=120)
+        tree.column("field", width=80)
+        tree.column("pattern", width=300)
+        tree.column("score", width=60)
+        tree.pack(fill=tk.BOTH, expand=True)
+
+        def _refresh():
+            for row in tree.get_children():
+                tree.delete(row)
+            for r in self._load_custom_rules():
+                tree.insert("", tk.END, values=(r["name"], r["field"], r["pattern"], r["score"]))
+
+        _refresh()
+
+        btn_frame = ttk.Frame(dlg)
+        btn_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        def _add():
+            add_dlg = tk.Toplevel(dlg)
+            add_dlg.title("添加规则")
+            add_dlg.geometry("400x250")
+            add_dlg.transient(dlg)
+            ttk.Label(add_dlg, text="名称:").pack(anchor=tk.W, padx=10, pady=(10, 0))
+            name_var = tk.StringVar()
+            ttk.Entry(add_dlg, textvariable=name_var, width=40).pack(padx=10)
+            ttk.Label(add_dlg, text="匹配字段:").pack(anchor=tk.W, padx=10, pady=(10, 0))
+            field_var = tk.StringVar(value="both")
+            ttk.Combobox(add_dlg, textvariable=field_var, values=["uname", "sign", "both"], width=10).pack(anchor=tk.W, padx=10)
+            ttk.Label(add_dlg, text="正则表达式:").pack(anchor=tk.W, padx=10, pady=(10, 0))
+            pat_var = tk.StringVar()
+            ttk.Entry(add_dlg, textvariable=pat_var, width=40).pack(padx=10)
+            ttk.Label(add_dlg, text="分数 (0-200):").pack(anchor=tk.W, padx=10, pady=(10, 0))
+            score_var = tk.StringVar(value="30")
+            ttk.Entry(add_dlg, textvariable=score_var, width=10).pack(anchor=tk.W, padx=10)
+
+            def _save():
+                name = name_var.get().strip()
+                pat = pat_var.get().strip()
+                if not name or not pat:
+                    return
+                rules = self._load_custom_rules()
+                rules.append({
+                    "name": name, "field": field_var.get(),
+                    "pattern": pat, "score": int(score_var.get())
+                })
+                self._save_custom_rules(rules)
+                add_dlg.destroy()
+                _refresh()
+            ttk.Button(add_dlg, text="保存", command=_save).pack(pady=10)
+
+        ttk.Button(btn_frame, text="➕ 添加", command=_add).pack(side=tk.LEFT, padx=3)
+
+        def _delete():
+            sel = tree.selection()
+            if not sel:
+                return
+            idx = tree.index(sel[0])
+            rules = self._load_custom_rules()
+            if 0 <= idx < len(rules):
+                rules.pop(idx)
+                self._save_custom_rules(rules)
+                _refresh()
+        ttk.Button(btn_frame, text="🗑 删除", command=_delete).pack(side=tk.LEFT, padx=3)
+        ttk.Button(btn_frame, text="关闭", command=dlg.destroy).pack(side=tk.RIGHT, padx=3)
+
+    # ── 自定义API对话框 ──────────────────────────
+
+    def _get_custom_api_path(self):
+        from ..utils.helpers import get_data_dir
+        return get_data_dir() / "custom_apis.toml"
+
+    def _open_custom_api_dialog(self):
+        dlg = tk.Toplevel(self)
+        dlg.title("自定义API探测")
+        dlg.geometry("600x400")
+        dlg.transient(self)
+
+        ttk.Label(dlg, text="添加自定义 API 端点用于批量探测，{mid} 会被替换为 UID", padding=10).pack()
+
+        tree_frame = ttk.Frame(dlg)
+        tree_frame.pack(fill=tk.BOTH, expand=True, padx=10)
+
+        cols = ("name", "url", "method", "extract")
+        tree = ttk.Treeview(tree_frame, columns=cols, show="headings")
+        tree.heading("name", text="名称")
+        tree.heading("url", text="URL (用{mid})")
+        tree.heading("method", text="方法")
+        tree.heading("extract", text="提取字段")
+        tree.column("name", width=100)
+        tree.column("url", width=250)
+        tree.column("method", width=60)
+        tree.column("extract", width=100)
+        tree.pack(fill=tk.BOTH, expand=True)
+
+        def _refresh():
+            for row in tree.get_children():
+                tree.delete(row)
+            p = self._get_custom_api_path()
+            if p.exists():
+                import tomllib as _tl
+                try:
+                    with open(p, "rb") as f:
+                        data = _tl.load(f)
+                    for a in data.get("api", []):
+                        tree.insert("", tk.END, values=(
+                            a["name"], a["url"], a.get("method", "GET"),
+                            a.get("extract_field", "")
+                        ))
+                except Exception:
+                    pass
+
+        _refresh()
+
+        btn_frame = ttk.Frame(dlg)
+        btn_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        def _add():
+            add_dlg = tk.Toplevel(dlg)
+            add_dlg.title("添加API")
+            add_dlg.geometry("450x250")
+            add_dlg.transient(dlg)
+            ttk.Label(add_dlg, text="名称:").pack(anchor=tk.W, padx=10)
+            name_var = tk.StringVar()
+            ttk.Entry(add_dlg, textvariable=name_var, width=40).pack(padx=10)
+            ttk.Label(add_dlg, text="URL ({mid} 替换):").pack(anchor=tk.W, padx=10, pady=(5, 0))
+            url_var = tk.StringVar()
+            ttk.Entry(add_dlg, textvariable=url_var, width=40).pack(padx=10)
+            ttk.Label(add_dlg, text="提取字段 (如 data.level):").pack(anchor=tk.W, padx=10, pady=(5, 0))
+            extract_var = tk.StringVar()
+            ttk.Entry(add_dlg, textvariable=extract_var, width=40).pack(padx=10)
+            ttk.Label(add_dlg, text="请求方法:").pack(anchor=tk.W, padx=10, pady=(5, 0))
+            method_var = tk.StringVar(value="GET")
+            ttk.Combobox(add_dlg, textvariable=method_var, values=["GET", "POST"], width=10).pack(anchor=tk.W, padx=10)
+
+            def _save():
+                name = name_var.get().strip()
+                url = url_var.get().strip()
+                if not name or not url:
+                    return
+                p = self._get_custom_api_path()
+                p.parent.mkdir(parents=True, exist_ok=True)
+                import tomllib as _tl
+                apis = []
+                if p.exists():
+                    try:
+                        with open(p, "rb") as f:
+                            apis = _tl.load(f).get("api", [])
+                    except Exception:
+                        pass
+                apis.append({
+                    "name": name, "url": url, "method": method_var.get(),
+                    "extract_field": extract_var.get()
+                })
+                lines = ["# 自定义 API 端点\n"]
+                for a in apis:
+                    lines.append("[[api]]\n")
+                    lines.append(f'name = "{a["name"]}"\n')
+                    lines.append(f'url = """{a["url"]}"""\n')
+                    lines.append(f'method = "{a.get("method", "GET")}"\n')
+                    lines.append(f'extract_field = "{a.get("extract_field", "")}"\n\n')
+                p.write_text("".join(lines), encoding="utf-8")
+                add_dlg.destroy()
+                _refresh()
+            ttk.Button(add_dlg, text="保存", command=_save).pack(pady=10)
+
+        ttk.Button(btn_frame, text="➕ 添加", command=_add).pack(side=tk.LEFT, padx=3)
+
+        def _delete():
+            sel = tree.selection()
+            if not sel:
+                return
+            idx = tree.index(sel[0])
+            p = self._get_custom_api_path()
+            if p.exists():
+                import tomllib as _tl
+                try:
+                    with open(p, "rb") as f:
+                        apis = _tl.load(f).get("api", [])
+                    if 0 <= idx < len(apis):
+                        apis.pop(idx)
+                        lines = ["# 自定义 API 端点\n"]
+                        for a in apis:
+                            lines.append("[[api]]\n")
+                            lines.append(f'name = "{a["name"]}"\n')
+                            lines.append(f'url = """{a["url"]}"""\n')
+                            lines.append(f'method = "{a.get("method", "GET")}"\n')
+                            lines.append(f'extract_field = "{a.get("extract_field", "")}"\n\n')
+                        p.write_text("".join(lines), encoding="utf-8")
+                except Exception:
+                    pass
+            _refresh()
+        ttk.Button(btn_frame, text="🗑 删除", command=_delete).pack(side=tk.LEFT, padx=3)
+        ttk.Button(btn_frame, text="关闭", command=dlg.destroy).pack(side=tk.RIGHT, padx=3)
 
     # ── 取关 ─────────────────────────────────────
 
@@ -624,14 +951,77 @@ f/f比: {data.get('ff_ratio', '')}
             messagebox.showinfo("提示", "没有标记为删除的账号")
             return
 
+        ids = [f"{r['mid']} - {r['uname']}" for r in rows]
         count = len(rows)
+
+        # ── 1级: 数量确认 ──
         if not messagebox.askyesno(
-            "确认取关",
-            f"即将取关 {count} 个账号, 此操作不可撤销!\n\n"
-            "确定要继续吗?"
+            "取关确认 (1/3)",
+            f"共 {count} 个账号标记为待取关。\n\n"
+            "下一步将展示 UID 与用户名列表，\n确认查看？"
         ):
             return
 
+        # ── 2级: 名单确认 ──
+        list_dlg = tk.Toplevel(self)
+        list_dlg.title(f"取关确认 (2/3) — {count} 个账号")
+        list_dlg.geometry("500x400")
+        list_dlg.transient(self)
+
+        st = scrolledtext.ScrolledText(list_dlg, font=("Consolas", 10))
+        st.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        for line in ids:
+            st.insert(tk.END, line + "\n")
+        st.configure(state=tk.DISABLED)
+
+        confirm_flag = [False]
+
+        def _confirm():
+            confirm_flag[0] = True
+            list_dlg.destroy()
+
+        def _cancel():
+            list_dlg.destroy()
+
+        btn_f = ttk.Frame(list_dlg)
+        btn_f.pack(fill=tk.X, padx=10, pady=(0, 10))
+        ttk.Button(btn_f, text="确认取关这些账号", command=_confirm).pack(side=tk.LEFT, padx=3)
+        ttk.Button(btn_f, text="取消", command=_cancel).pack(side=tk.LEFT, padx=3)
+
+        self.wait_window(list_dlg)
+        if not confirm_flag[0]:
+            return
+
+        # ── 3级: 不可恢复警告 ──
+        input_dlg = tk.Toplevel(self)
+        input_dlg.title("取关确认 (3/3) — 最终警告")
+        input_dlg.geometry("420x200")
+        input_dlg.transient(self)
+
+        ttk.Label(input_dlg, text="⚠ 此操作不可恢复！", font=("", 12, "bold"), foreground="red").pack(pady=10)
+        ttk.Label(input_dlg, text=f"即将永久取消关注 {count} 个账号。\n请在下方输入 DELETE 确认操作：").pack()
+
+        input_var = tk.StringVar()
+        ttk.Entry(input_dlg, textvariable=input_var, width=20, font=("", 11)).pack(pady=10)
+
+        final_ok = [False]
+
+        def _final():
+            if input_var.get().strip() == "DELETE":
+                final_ok[0] = True
+                input_dlg.destroy()
+            else:
+                messagebox.showwarning("输入错误", "请输入 DELETE 确认", parent=input_dlg)
+
+        ttk.Button(input_dlg, text="确认取关", command=_final).pack()
+        ttk.Button(input_dlg, text="取消", command=input_dlg.destroy).pack(pady=5)
+
+        self.wait_window(input_dlg)
+        if not final_ok[0]:
+            self.log("取关已取消")
+            return
+
+        # ── 执行 ──
         uids = [str(r["mid"]) for r in rows]
         self.unfollow_log.insert(tk.END, f"开始取关 {len(uids)} 个账号...\n")
 
@@ -641,8 +1031,7 @@ f/f比: {data.get('ff_ratio', '')}
                 self.after(0, lambda: self.unfollow_progress.configure(value=pct))
                 self.after(0, lambda: self.unfollow_log.insert(
                     tk.END,
-                    f"  [{done}/{total}] {'✓' if done == ok else '✗'} "
-                    f"成功: {ok}/{done}\n"
+                    f"  [{done}/{total}] 成功: {ok}\n"
                 ))
                 self.after(0, lambda: self.unfollow_log.see(tk.END))
 
@@ -650,6 +1039,13 @@ f/f比: {data.get('ff_ratio', '')}
                 ok, fail = batch_unfollow(client, uids, interval=3.0,
                                           progress_callback=progress)
                 self.after(0, lambda: self.log(f"取关完成: {ok} 成功, {fail} 失败"))
+                # 取关后标记为已处理
+                conn2 = database.get_conn()
+                conn2.execute(
+                    "DELETE FROM verdicts WHERE verdict = 'delete'"
+                )
+                conn2.commit()
+                conn2.close()
                 self._refresh_unfollow_count()
             except Exception as e:
                 self.after(0, lambda: self.log(f"取关异常: {e}"))
