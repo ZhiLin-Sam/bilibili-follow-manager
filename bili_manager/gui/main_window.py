@@ -582,6 +582,7 @@ f/f比: {data.get('ff_ratio', '')}
         database.save_verdicts(verdicts)
         self._refresh_stats()
         self._refresh_review_table()
+        self._refresh_unfollow_count()
         self.log(f"规则已应用: {len(verdicts)} 条判定已保存")
 
     # ── 特别关注保护 ──────────────────────────────
@@ -840,6 +841,7 @@ f/f比: {data.get('ff_ratio', '')}
         if rejected:
             messagebox.showwarning("保护中", f"以下账号已锁定保护，不可标记为删除:\n" + "\n".join(rejected))
         self._refresh_review_table()
+        self._refresh_unfollow_count()
         self.log(f"已标记 {len(sel) - len(rejected)} 条 → {verdict}" + (
             f" ({len(rejected)} 条被保护拒绝)" if rejected else ""))
 
@@ -1157,7 +1159,7 @@ f/f比: {data.get('ff_ratio', '')}
 
         conn = database.get_conn()
         rows = conn.execute(
-            "SELECT mid, uname FROM follows f "
+            "SELECT f.mid, f.uname FROM follows f "
             "JOIN verdicts v ON f.mid = v.mid WHERE v.verdict = 'delete'"
         ).fetchall()
         conn.close()
