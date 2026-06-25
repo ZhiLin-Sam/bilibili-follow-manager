@@ -284,6 +284,9 @@ class ReviewPage(BasePage):
         if not sel:
             return
         rejected = []
+        changed = 0
+        verdict_disp_map = {"keep": "保留", "delete": "删除", "protected": "保护⭐", "unreviewed": "待审"}
+
         for item in sel:
             mid = self.tree.item(item)["values"][0]
             conn = database.get_conn()
@@ -293,9 +296,26 @@ class ReviewPage(BasePage):
             if current == "protected" and verdict == "delete":
                 rejected.append(self.tree.item(item)["values"][1])
                 continue
+
             database.save_verdicts([{"mid": mid, "verdict": verdict}])
+            changed += 1
+
+            # 原地更新 Treeview 行 — 不触发全量刷新
+            col_idx = 4  # "verdict" 列 (CORE_COLS 第5列, 0-indexed=4)
+            vals = list(self.tree.item(item)["values"])
+            vals[col_idx] = verdict_disp_map.get(verdict, verdict)
+            # 移除旧 tags，只保留非判定 tag（这里旧 tag 就是原 verdict），全部替换
+            new_tags = (verdict,)
+            self.tree.item(item, values=vals, tags=new_tags)
+
+            # 同步 _all_data
+            for row_data in self._all_data:
+                if str(row_data["mid"]) == str(mid):
+                    row_data["verdict"] = verdict
+                    break
+
         if rejected:
             messagebox.showwarning("保护中", f"以下账号已锁定保护:\n" + "\n".join(rejected))
-        self._refresh()
-        self.log(f"已标记 {len(sel) - len(rejected)} 条 → {verdict}" +
+        self._update_count()
+        self.log(f"已标记 {changed} 条 → {verdict}" +
                  (f" ({len(rejected)} 条被保护拒绝)" if rejected else ""))
