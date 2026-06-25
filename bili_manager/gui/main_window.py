@@ -29,6 +29,7 @@ class BiliGUI(tk.Tk):
         self.follows: list[dict] = []
         self.probes: list[dict] = []
         self._review_data: list[dict] = []
+        self.special_follow_uids: set[int] = set()
         self._op_active = False
         self._stop_requested = False
 
@@ -58,9 +59,12 @@ class BiliGUI(tk.Tk):
     def _start_op(self):
         self._op_active = True
         self._stop_requested = False
+        current = self.notebook.index(self.notebook.select())
         for i in range(self.notebook.index("end")):
-            self.notebook.tab(i, state=tk.DISABLED)
+            if i != current:
+                self.notebook.tab(i, state=tk.DISABLED)
         self._stop_btn.configure(state=tk.NORMAL)
+        self.update_idletasks()
 
     def _end_op(self):
         self._op_active = False
@@ -68,6 +72,7 @@ class BiliGUI(tk.Tk):
         for i in range(self.notebook.index("end")):
             self.notebook.tab(i, state=tk.NORMAL)
         self._stop_btn.configure(state=tk.DISABLED)
+        self.update_idletasks()
 
     def _stop_op(self):
         self._stop_requested = True
@@ -152,6 +157,7 @@ class BiliGUI(tk.Tk):
         btns = ttk.Frame(f)
         btns.pack(fill=tk.X, pady=10)
         ttk.Button(btns, text="⚙ 应用签名规则", command=self._apply_rules).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btns, text="⭐ 特别关注保护", command=self._fetch_special_follows).pack(side=tk.LEFT, padx=5)
         ttk.Button(btns, text="📝 自定义规则", command=self._open_custom_rules_dialog).pack(side=tk.LEFT, padx=5)
         ttk.Button(btns, text="🔬 深层探测可疑账号", command=self._deep_probe).pack(side=tk.LEFT, padx=5)
         ttk.Button(btns, text="🔧 自定义API", command=self._open_custom_api_dialog).pack(side=tk.LEFT, padx=5)
@@ -499,11 +505,12 @@ f/f比: {data.get('ff_ratio', '')}
         assert self.client is not None
         client = self.client
         self._start_op()
+        self.fetch_progress["value"] = 0
+        self.fetch_label.set("拉取中...")
+        self.log("开始拉取关注列表...")
+        self.update_idletasks()
 
         def _run():
-            self.fetch_progress["value"] = 0
-            self.fetch_label.set("拉取中...")
-            self.log("开始拉取关注列表...")
 
             def progress(pg, total, count):
                 if self._stop_requested:
@@ -577,6 +584,61 @@ f/f比: {data.get('ff_ratio', '')}
         self._refresh_review_table()
         self.log(f"规则已应用: {len(verdicts)} 条判定已保存")
 
+    # ── 特别关注保护 ──────────────────────────────
+
+    def _fetch_special_follows(self):
+        """拉取特别关注列表，自动保护"""
+        if not self.client:
+            messagebox.showwarning("未登录", "请先登录")
+            return
+        assert self.client is not None
+        client = self.client
+        self.log("拉取特别关注列表...")
+
+        def _run():
+            try:
+                resp = client.get("https://api.bilibili.com/x/relation/tag")
+                if resp.get("code") != 0:
+                    self.after(0, lambda: self.log("获取关注分组失败"))
+                    return
+                tags = resp.get("data", [])
+                special_tagid = -10
+                for t in tags:
+                    if t.get("tagid") == special_tagid:
+                        count = t.get("count", 0)
+                        break
+                uids = []
+                pn = 1
+                while True:
+                    r = client.get(
+                        "https://api.bilibili.com/x/relation/tags",
+                        params={"tagid": special_tagid, "pn": pn, "ps": 50}
+                    )
+                    if r.get("code") != 0:
+                        break
+                    items = r.get("data", [])
+                    if not items:
+                        break
+                    for u in items:
+                        uids.append(u["mid"])
+                    pn += 1
+                self.special_follow_uids = set(uids)
+                conn = database.get_conn()
+                for uid in uids:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO verdicts (mid, verdict, rule_keep, keep_score) "
+                        "VALUES (?, 'protected', '特别关注', 999)",
+                        (uid,)
+                    )
+                conn.commit()
+                conn.close()
+                self.after(0, lambda: self.log(f"特别关注: {len(uids)} 个已自动保护 ⭐"))
+                self.after(0, self._refresh_review_table)
+            except Exception as e:
+                self.after(0, lambda: self.log(f"拉取特别关注失败: {e}"))
+
+        threading.Thread(target=_run, daemon=True).start()
+
     def _deep_probe(self):
         if not self.client:
             messagebox.showwarning("未登录", "请先登录")
@@ -584,6 +646,7 @@ f/f比: {data.get('ff_ratio', '')}
         assert self.client is not None
         client = self.client
         self._start_op()
+        self.filter_progress["value"] = 0
 
         # 获取待探测 UID
         uids = database.get_follow_uids()
@@ -596,6 +659,7 @@ f/f比: {data.get('ff_ratio', '')}
         uids = [str(u) for u in uids]
         self.filter_label.set(f"探测中: 0/{len(uids)}")
         self.log(f"开始深度探测 {len(uids)} 个账号 (批量5, 间隔3s)...")
+        self.update_idletasks()
 
         def _run():
             def progress(done, total):
@@ -720,7 +784,12 @@ f/f比: {data.get('ff_ratio', '')}
                 mtime_str = ""
 
             verdict = d.get("verdict") or "unreviewed"
-            verdict_display = {"keep": "保留", "delete": "删除", "protected": "🔒保护"}.get(verdict, "待审")
+            is_special = d["mid"] in self.special_follow_uids
+            rule_keep = d.get("rule_keep") or ""
+            if verdict == "protected":
+                verdict_display = "⭐特别关注" if is_special else "🔒保护"
+            else:
+                verdict_display = {"keep": "保留", "delete": "删除"}.get(verdict, "待审")
 
             values_map = {
                 "mid": str(d["mid"]),
