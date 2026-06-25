@@ -398,7 +398,6 @@ f/f比: {data.get('ff_ratio', '')}
 
     def _login_qrcode_popup(self):
         import requests
-        from io import BytesIO
         from PIL import Image, ImageTk
 
         dlg = tk.Toplevel(self)
@@ -432,9 +431,12 @@ f/f比: {data.get('ff_ratio', '')}
                 qr_url = resp["data"]["url"]
                 qrcode_key = resp["data"]["qrcode_key"]
 
-                # 下载二维码图片
-                img_resp = requests.get(qr_url, timeout=10)
-                img = Image.open(BytesIO(img_resp.content))
+                # 本地生成二维码图片
+                import qrcode
+                qr = qrcode.QRCode(box_size=5, border=2)
+                qr.add_data(qr_url)
+                qr.make(fit=True)
+                img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
                 try:
                     img = img.resize((200, 200), Image.Resampling.LANCZOS)
                 except (AttributeError, NameError):
