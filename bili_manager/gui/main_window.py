@@ -29,6 +29,8 @@ class BiliGUI(tk.Tk):
         self.follows: list[dict] = []
         self.probes: list[dict] = []
         self._review_data: list[dict] = []
+        self._op_active = False
+        self._stop_requested = False
 
         self._build_ui()
         self._init_db()
@@ -51,6 +53,26 @@ class BiliGUI(tk.Tk):
             return
         self.status_var.set("未登录 — 请先扫码登录")
 
+    # ── 操作防抖 / 停止 ──────────────────────────
+
+    def _start_op(self):
+        self._op_active = True
+        self._stop_requested = False
+        for i in range(self.notebook.index("end")):
+            self.notebook.tab(i, state=tk.DISABLED)
+        self._stop_btn.configure(state=tk.NORMAL)
+
+    def _end_op(self):
+        self._op_active = False
+        self._stop_requested = False
+        for i in range(self.notebook.index("end")):
+            self.notebook.tab(i, state=tk.NORMAL)
+        self._stop_btn.configure(state=tk.DISABLED)
+
+    def _stop_op(self):
+        self._stop_requested = True
+        self.log("⏹ 正在停止当前操作...")
+
     # ── UI 构建 ───────────────────────────────────
 
     def _build_ui(self):
@@ -58,6 +80,8 @@ class BiliGUI(tk.Tk):
         self.status_var = tk.StringVar(value="未登录")
         status_bar = ttk.Label(self, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W, padding=4)
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        self._stop_btn = ttk.Button(status_bar, text="⏹ 停止", command=self._stop_op, state=tk.DISABLED, width=8)
+        self._stop_btn.pack(side=tk.RIGHT, padx=4, pady=2)
 
         # Notebook
         self.notebook = ttk.Notebook(self)
@@ -98,9 +122,7 @@ class BiliGUI(tk.Tk):
         login_frame = ttk.LabelFrame(f, text="登录", padding=10)
         login_frame.pack(fill=tk.X, pady=10)
 
-        ttk.Button(login_frame, text="🔑 扫码登录 (终端ASCII QR)", command=self._login_terminal).pack(
-            side=tk.LEFT, padx=5)
-        ttk.Button(login_frame, text="🔑 扫码登录 (浏览器)", command=self._login_browser).pack(
+        ttk.Button(login_frame, text="🔑 扫码登录", command=self._login_qrcode_popup).pack(
             side=tk.LEFT, padx=5)
 
         self.login_status = tk.StringVar(value="等待登录...")
@@ -144,6 +166,17 @@ class BiliGUI(tk.Tk):
         return f
 
     # ── Tab: 审查 ─────────────────────────────────
+
+    _COL_FIELD_MAP = {
+        "mid": "mid", "uname": "uname", "sign": "sign",
+        "official": "official_verify_type", "vip": "vip_type",
+        "follower": "probe_follower", "archive_count": "archive_count",
+        "level": "level", "total_view": "total_view",
+        "ff_ratio": "ff_ratio", "spacesta": "spacesta",
+        "mtime": "mtime", "rule_keep": "rule_keep",
+        "rule_delete": "rule_delete", "delete_score": "delete_score",
+        "verdict": "verdict",
+    }
 
     REVIEW_COLUMNS = [
         ("mid", "UID", 90),
@@ -194,7 +227,8 @@ class BiliGUI(tk.Tk):
         col_ids = [c[0] for c in self.REVIEW_COLUMNS]
         self.review_tree = ttk.Treeview(tree_frame, columns=col_ids, show="headings", selectmode="extended")
         for col_id, col_text, col_width in self.REVIEW_COLUMNS:
-            self.review_tree.heading(col_id, text=col_text)
+            self.review_tree.heading(col_id, text=col_text,
+                command=lambda c=col_id: self._sort_by_column(c))
             self.review_tree.column(col_id, width=col_width, minwidth=30)
 
         h_scroll = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=self.review_tree.xview)
@@ -208,6 +242,8 @@ class BiliGUI(tk.Tk):
 
         # 双击查看详情
         self.review_tree.bind("<Double-1>", self._on_review_double_click)
+        # 右键菜单
+        self.review_tree.bind("<Button-3>", self._on_tree_right_click)
 
         # 判定按钮
         action_frame = ttk.Frame(f)
@@ -268,6 +304,73 @@ f/f比: {data.get('ff_ratio', '')}
 空间: https://space.bilibili.com/{data.get('mid', '')}"""
         messagebox.showinfo(f"账号详情: {data.get('uname', '')}", detail)
 
+    # ── 排序 ─────────────────────────────────────
+
+    def _sort_by_column(self, col):
+        reverse = False
+        if hasattr(self, '_sort_col') and self._sort_col == col:
+            reverse = not self._sort_reverse
+        self._sort_col = col
+        self._sort_reverse = reverse
+
+        field = self._COL_FIELD_MAP.get(col)
+        if not field:
+            return
+
+        def _key(d):
+            v = d.get(field)
+            if v is None:
+                v = "" if field in ("uname", "sign", "rule_keep", "rule_delete", "verdict") else 0
+            if isinstance(v, str):
+                return v.lower()
+            return v or 0
+
+        data = sorted(self._review_data, key=_key, reverse=reverse)
+        self._rebuild_tree(data)
+
+    # ── 右键菜单 ─────────────────────────────────
+
+    def _on_tree_right_click(self, event):
+        region = self.review_tree.identify_region(event.x, event.y)
+        col_str = self.review_tree.identify_column(event.x)
+        col_num = int(col_str.replace("#", "")) - 1
+        if 0 <= col_num < len(self.REVIEW_COLUMNS):
+            col_name = self.REVIEW_COLUMNS[col_num][0]
+        else:
+            col_name = None
+
+        m = tk.Menu(self.review_tree, tearoff=0)
+        if col_name:
+            def _asc(c=col_name):
+                setattr(self, '_sort_col', '')
+                self._sort_by_column(c)
+            def _desc(c=col_name):
+                setattr(self, '_sort_col', c)
+                setattr(self, '_sort_reverse', False)
+                self._sort_by_column(c)
+                setattr(self, '_sort_reverse', True)
+                self._rebuild_tree(
+                    sorted(self._review_data,
+                           key=lambda d: (d.get(self._COL_FIELD_MAP.get(c, "")) or 0),
+                           reverse=True))
+            m.add_command(label=f"↑ 按此列正序", command=_asc)
+            m.add_command(label=f"↓ 按此列倒序", command=_desc)
+        m.add_command(label="📋 复制选中 UID", command=self._copy_selected_uids)
+        try:
+            m.tk_popup(event.x_root, event.y_root)
+        finally:
+            m.grab_release()
+
+    def _copy_selected_uids(self):
+        items = self.review_tree.selection()
+        uids = []
+        for i in items:
+            uids.append(self.review_tree.item(i)["values"][0])
+        if uids:
+            self.clipboard_clear()
+            self.clipboard_append("\n".join(uids))
+            self.log(f"已复制 {len(uids)} 个 UID")
+
     # ── Tab: 取关 ─────────────────────────────────
 
     def _build_unfollow_tab(self) -> ttk.Frame:
@@ -293,23 +396,30 @@ f/f比: {data.get('ff_ratio', '')}
 
     # ── 登录逻辑 ──────────────────────────────────
 
-    def _login_terminal(self):
-        self.log("终端展示二维码, 请查看控制台窗口扫码...")
-        def _run():
-            try:
-                cookies, _ = login_qrcode(as_image=False, poll_timeout=180)
-                self.client = BiliClient(cookies)
-                self.after(0, lambda: self._on_login_success())
-            except Exception as e:
-                self.after(0, lambda: self._on_login_fail(str(e)))
-        threading.Thread(target=_run, daemon=True).start()
+    def _login_qrcode_popup(self):
+        import requests
+        from io import BytesIO
+        from PIL import Image, ImageTk
 
-    def _login_browser(self):
-        import webbrowser
-        self.log("终端的扫码链接已复制, 同时尝试打开浏览器...")
+        dlg = tk.Toplevel(self)
+        dlg.title("扫码登录")
+        dlg.geometry("350x380")
+        dlg.transient(self)
+        dlg.resizable(False, False)
+
+        status_var = tk.StringVar(value="生成二维码中...")
+        ttk.Label(dlg, textvariable=status_var, font=("", 11)).pack(pady=10)
+
+        qr_label = ttk.Label(dlg)
+        qr_label.pack(pady=5)
+
+        def _cancel():
+            dlg.destroy()
+
+        ttk.Button(dlg, text="取消", command=_cancel).pack(pady=10)
+
         def _run():
             try:
-                import requests
                 session = requests.Session()
                 session.headers.update({
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36"
@@ -317,36 +427,53 @@ f/f比: {data.get('ff_ratio', '')}
                 resp = session.get(
                     "https://passport.bilibili.com/x/passport-login/web/qrcode/generate"
                 ).json()
-                if resp["code"] == 0:
-                    qr_url = resp["data"]["url"]
-                    qrcode_key = resp["data"]["qrcode_key"]
-                    webbrowser.open(qr_url)
-                    self.log(f"浏览器已打开, 或手动访问: {qr_url}")
-                    self.log("扫码后等待确认...")
-
-                    start = time.time()
-                    while time.time() - start < 180:
-                        pr = session.get(
-                            "https://passport.bilibili.com/x/passport-login/web/qrcode/poll",
-                            params={"qrcode_key": qrcode_key}
-                        ).json()
-                        code = pr.get("data", {}).get("code", -1)
-                        if code == 0:
-                            cookies = {}
-                            for c in session.cookies:
-                                cookies[c.name] = c.value
-                            from ..auth.login import save_cookies
-                            save_cookies(cookies)
-                            self.client = BiliClient(cookies)
-                            self.after(0, lambda: self._on_login_success())
-                            return
-                        elif code == 86038:
-                            raise RuntimeError("二维码已过期")
-                        time.sleep(2)
-                else:
+                if resp["code"] != 0:
                     raise RuntimeError(f"生成二维码失败: {resp}")
+                qr_url = resp["data"]["url"]
+                qrcode_key = resp["data"]["qrcode_key"]
+
+                # 下载二维码图片
+                img_resp = requests.get(qr_url, timeout=10)
+                img = Image.open(BytesIO(img_resp.content))
+                try:
+                    img = img.resize((200, 200), Image.Resampling.LANCZOS)
+                except (AttributeError, NameError):
+                    img = img.resize((200, 200))  # default nearest-neighbor
+                photo = ImageTk.PhotoImage(img)
+
+                self.after(0, lambda p=photo: qr_label.configure(image=p))
+                # prevent GC
+                qr_label._img_ref = photo
+                self.after(0, lambda: status_var.set("请使用B站App扫码"))
+
+                # 轮询
+                start = time.time()
+                while time.time() - start < 180:
+                    pr = session.get(
+                        "https://passport.bilibili.com/x/passport-login/web/qrcode/poll",
+                        params={"qrcode_key": qrcode_key}
+                    ).json()
+                    code = pr.get("data", {}).get("code", -1)
+                    if code == 0:
+                        cookies = {}
+                        for c in session.cookies:
+                            cookies[c.name] = c.value
+                        from ..auth.login import save_cookies
+                        save_cookies(cookies)
+                        self.client = BiliClient(cookies)
+                        self.after(0, lambda: self._on_login_success())
+                        self.after(0, dlg.destroy)
+                        return
+                    elif code == 86038:
+                        self.after(0, lambda: status_var.set("二维码已过期，请关闭重试"))
+                        return
+                    elif code == 86090:
+                        self.after(0, lambda: status_var.set("已扫码，请在App中确认..."))
+                    time.sleep(2)
             except Exception as e:
                 self.after(0, lambda: self._on_login_fail(str(e)))
+                self.after(0, dlg.destroy)
+
         threading.Thread(target=_run, daemon=True).start()
 
     def _on_login_success(self):
@@ -369,6 +496,7 @@ f/f比: {data.get('ff_ratio', '')}
             return
         assert self.client is not None
         client = self.client
+        self._start_op()
 
         def _run():
             self.fetch_progress["value"] = 0
@@ -376,6 +504,8 @@ f/f比: {data.get('ff_ratio', '')}
             self.log("开始拉取关注列表...")
 
             def progress(pg, total, count):
+                if self._stop_requested:
+                    raise RuntimeError("用户中止")
                 pct = (pg / total) * 100
                 self.after(0, lambda: self.fetch_progress.configure(value=pct))
                 self.after(0, lambda: self.fetch_label.set(f"第 {pg}/{total} 页, 已获取 {count}"))
@@ -388,8 +518,12 @@ f/f比: {data.get('ff_ratio', '')}
                 self.after(0, lambda: self.log(f"关注列表已保存: {count} 条到数据库"))
                 self.after(0, self._refresh_review_table)
                 self.after(0, self._refresh_stats)
+            except RuntimeError as e:
+                self.after(0, lambda: self.log(f"操作已停止: {e}"))
             except Exception as e:
                 self.after(0, lambda: self.log(f"拉取失败: {e}"))
+            finally:
+                self.after(0, self._end_op)
 
         threading.Thread(target=_run, daemon=True).start()
 
@@ -447,27 +581,30 @@ f/f比: {data.get('ff_ratio', '')}
             return
         assert self.client is not None
         client = self.client
+        self._start_op()
 
-        # 获取待探测 UID (unreviewed + delete)
+        # 获取待探测 UID
         uids = database.get_follow_uids()
         if not uids:
-            # 从数据库取所有关注的 UID
             conn = database.get_conn()
             rows = conn.execute("SELECT mid FROM follows").fetchall()
             conn.close()
             uids = [r["mid"] for r in rows]
 
         uids = [str(u) for u in uids]
-        self.log(f"开始深度探测 {len(uids)} 个账号...")
+        self.filter_label.set(f"探测中: 0/{len(uids)}")
+        self.log(f"开始深度探测 {len(uids)} 个账号 (批量5, 间隔3s)...")
 
         def _run():
             def progress(done, total):
+                if self._stop_requested:
+                    raise RuntimeError("用户中止")
                 pct = (done / total) * 100
                 self.after(0, lambda: self.filter_progress.configure(value=pct))
                 self.after(0, lambda: self.filter_label.set(f"探测中: {done}/{total}"))
 
             try:
-                results = batch_probe(client, uids, concurrency=8, batch_delay=1.5,
+                results = batch_probe(client, uids, concurrency=5, batch_delay=3.0,
                                       progress_callback=progress)
                 self.probes = results
                 database.save_probes(results)
@@ -477,7 +614,6 @@ f/f比: {data.get('ff_ratio', '')}
                 probe_verdicts = []
                 for p in results:
                     r = engine.evaluate_probe(p)
-                    # 获取已有签名判定
                     conn = database.get_conn()
                     row = conn.execute(
                         "SELECT keep_score, delete_score FROM verdicts WHERE mid = ?",
@@ -489,13 +625,11 @@ f/f比: {data.get('ff_ratio', '')}
                     old_delete = row["delete_score"] if row else 0
                     total_keep = old_keep + r.keep_score
                     total_delete = old_delete + r.delete_score
-
+                    v = "unreviewed"
                     if total_delete >= 150 and total_keep < 100:
                         v = "delete"
                     elif total_keep >= total_delete:
                         v = "keep"
-                    else:
-                        v = "unreviewed"
 
                     probe_verdicts.append({
                         "mid": p["uid"],
@@ -513,8 +647,12 @@ f/f比: {data.get('ff_ratio', '')}
                     f"深度探测完成: {len(results)} 条, 已更新判定"))
                 self._refresh_stats()
                 self.after(0, self._refresh_review_table)
+            except RuntimeError as e:
+                self.after(0, lambda: self.log(f"操作已停止: {e}"))
             except Exception as e:
                 self.after(0, lambda: self.log(f"探测失败: {e}"))
+            finally:
+                self.after(0, self._end_op)
 
         threading.Thread(target=_run, daemon=True).start()
 
@@ -541,10 +679,16 @@ f/f比: {data.get('ff_ratio', '')}
     def _search_review_table(self):
         text = self.search_var.get().lower().strip()
         if text:
-            data = [d for d in self._review_data
-                    if text in str(d.get("mid", ""))
-                    or text in (d.get("uname") or "").lower()
-                    or text in ((d.get("sign") or "").lower())]
+            col_ids = [c[0] for c in self.REVIEW_COLUMNS]
+            filtered = []
+            for d in self._review_data:
+                match_str = " ".join(
+                    str(d.get(self._COL_FIELD_MAP.get(c, c), "") or "")
+                    for c in col_ids
+                ).lower()
+                if text in match_str:
+                    filtered.append(d)
+            data = filtered
         else:
             data = self._review_data
         self._rebuild_tree(data)
