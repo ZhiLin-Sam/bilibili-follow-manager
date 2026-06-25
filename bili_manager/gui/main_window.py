@@ -279,10 +279,11 @@ class BiliGUI(tk.Tk):
         threading.Thread(target=_run, daemon=True).start()
 
     def _on_login_success(self):
-        self.status_var.set(f"已登录 (UID: {self.client.uid})")
+        uid = self.client.uid if self.client else "?"
+        self.status_var.set(f"已登录 (UID: {uid})")
         self.login_status.set("登录成功!")
         self._enable_tabs()
-        self.log(f"登录成功! UID: {self.client.uid}")
+        self.log(f"登录成功! UID: {uid}")
 
     def _on_login_fail(self, err: str):
         self.login_status.set(f"登录失败: {err}")
@@ -295,6 +296,8 @@ class BiliGUI(tk.Tk):
         if not self.client:
             messagebox.showwarning("未登录", "请先登录")
             return
+        assert self.client is not None
+        client = self.client
 
         def _run():
             self.fetch_progress["value"] = 0
@@ -307,7 +310,7 @@ class BiliGUI(tk.Tk):
                 self.after(0, lambda: self.fetch_label.set(f"第 {pg}/{total} 页, 已获取 {count}"))
 
             try:
-                follows, total = fetch_all_followings(self.client, progress_callback=progress)
+                follows, total = fetch_all_followings(client, progress_callback=progress)
                 self.follows = follows
                 count = database.save_follows(follows)
                 self.after(0, lambda: self.fetch_label.set(f"完成! 共 {len(follows)}/{total} 条"))
@@ -364,6 +367,8 @@ class BiliGUI(tk.Tk):
         if not self.client:
             messagebox.showwarning("未登录", "请先登录")
             return
+        assert self.client is not None
+        client = self.client
 
         # 获取待探测 UID (unreviewed + delete)
         uids = database.get_follow_uids()
@@ -384,7 +389,7 @@ class BiliGUI(tk.Tk):
                 self.after(0, lambda: self.filter_label.set(f"探测中: {done}/{total}"))
 
             try:
-                results = batch_probe(self.client, uids, concurrency=8, batch_delay=1.5,
+                results = batch_probe(client, uids, concurrency=8, batch_delay=1.5,
                                       progress_callback=progress)
                 self.probes = results
                 database.save_probes(results)
@@ -520,6 +525,8 @@ class BiliGUI(tk.Tk):
         if not self.client:
             messagebox.showwarning("未登录", "请先登录")
             return
+        assert self.client is not None
+        client = self.client
 
         conn = database.get_conn()
         rows = conn.execute(
@@ -555,7 +562,7 @@ class BiliGUI(tk.Tk):
                 self.after(0, lambda: self.unfollow_log.see(tk.END))
 
             try:
-                ok, fail = batch_unfollow(self.client, uids, interval=3.0,
+                ok, fail = batch_unfollow(client, uids, interval=3.0,
                                           progress_callback=progress)
                 self.after(0, lambda: self.log(f"取关完成: {ok} 成功, {fail} 失败"))
                 self._refresh_unfollow_count()
