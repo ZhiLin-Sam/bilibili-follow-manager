@@ -1,0 +1,142 @@
+# Bilibili 关注管理 - 预设规则配置
+# 规则引擎: 按 priority 从高到低匹配, KEEP 规则优先于 DELETE 规则
+# 触发阈值: score >= threshold 则判定
+
+[scoring]
+# 默认综合得分阈值
+keep_threshold = 40      # >= 此分 → 保留
+delete_threshold = 60    # >= 此分 → 建议删除
+review_threshold = 999   # 两者之间 → 待审查 (默认全部标记为审查, 靠规则驱动)
+
+# --- KEEP 规则 (保留信号, priority 越小越优先) ---
+
+[[keep_rules]]
+name = "知名/百大/官方认证"
+priority = 1
+description = "有认证标识(个人/机构认证)的账号视为正规创作者"
+
+[[keep_rules]]
+name = "VIP用户+活跃"
+priority = 2
+description = "VIP用户且有签名且无营销话术 → 真人付费用户"
+
+[[keep_rules]]
+name = "英文用户名+有签名=真人"
+priority = 5
+description = "英文或日文用户名+有≥6字符签名 → 海外/国际用户,非僵尸号"
+
+[[keep_rules]]
+name = "创作/分享/制作类签名"
+priority = 6
+description = "签名包含创作/制作/分享等原创信号词"
+
+[[keep_rules]]
+name = "品牌/组织官方号"
+priority = 7
+description = "用户名含 _CN/_Official/官方/频道 等品牌组织标识"
+
+[[keep_rules]]
+name = "小说/连载+有认证"
+priority = 8
+description = "签名含小说/连载/网文关键词且有认证 → 作家/创作者"
+
+[[keep_rules]]
+name = "中文名+有签名≥8字+无营销"
+priority = 9
+description = "中文用户名+签名≥8字+无营销话术 → 小UP主防护"
+
+[[keep_rules]]
+name = "bili_前缀+有签名≥6字"
+priority = 10
+description = "bili_数字前缀但有较长签名 → 已改名活跃用户"
+
+# --- DELETE 规则 (删除信号) ---
+
+[[delete_rules]]
+name = "账号已注销"
+priority = 100
+description = "用户名/状态显示已注销"
+
+[[delete_rules]]
+name = "bili_数字+空签名+无认证"
+priority = 101
+description = "bili_数字前缀+无签名+无认证 → 默认僵尸号"
+
+[[delete_rules]]
+name = "免费领取+引流+无认证"
+priority = 105
+description = "签名为'免费领取'/'免费送'+引导关注/加群+无认证"
+
+[[delete_rules]]
+name = "引流链接+无认证"
+priority = 106
+description = "签名含短链接/网址/加群等引流信息且无认证"
+
+[[delete_rules]]
+name = "黑客/渗透速成+无认证"
+priority = 107
+description = "黑客/渗透/速成/入门教程类营销号"
+
+[[delete_rules]]
+name = "短剧营销+无认证"
+priority = 108
+description = "短剧/短剧推荐/追剧+免费看类营销"
+
+[[delete_rules]]
+name = "强营销标记叠加(≥2)"
+priority = 110
+description = "签名中同时出现≥2种营销信号(代理/赚钱/刷量/广告等)"
+
+[[delete_rules]]
+name = "投顾/理财营销"
+priority = 111
+description = "股票/投顾/理财/涨停等金融营销号"
+
+[[delete_rules]]
+name = "英文名+空签名+默认头像"
+priority = 120
+description = "纯英文/数字用户名+空签名+空认证 → 高概率僵尸"
+
+[[delete_rules]]
+name = "英文名+纯营销签名"
+priority = 121
+description = "英文用户名+签名是纯营销话术(无实质内容)"
+
+# --- 探测维度 (需调用 API 获取数据) ---
+
+[[probe_rules]]
+name = "账号已封禁"
+priority = 200
+description = "spacesta=-2 → 账号已被B站封禁"
+dimension = "spacesta"
+operator = "eq"
+value = -2
+
+[[probe_rules]]
+name = "纯空号"
+priority = 210
+description = "投稿=0 + followers=0 + level=0"
+dimension = "empty"
+field = "archive_count"
+operator = "eq"
+value = 0
+
+[[probe_rules]]
+name = "刷粉/互关号"
+priority = 215
+description = "关注/粉丝比 >5 且关注 >500"
+dimension = "ff_ratio"
+operator = "gte"
+value = 5.0
+
+[[probe_rules]]
+name = "死号"
+priority = 220
+description = "零投稿零粉丝但关注数>50(只关注不创作)"
+dimension = "dead"
+
+[unfollow]
+# 取关间隔(秒), 避免频率限制
+interval_seconds = 3
+# 每次取关数量上限
+batch_size = 50
