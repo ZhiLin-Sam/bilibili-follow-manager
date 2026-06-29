@@ -4,6 +4,20 @@ version = "0.1.0"
 description = "Bilibili Follow Manager — 关注列表分析与清理工具"
 requires-python = ">=3.11"
 license = { text = "MIT" }
+dependencies = [
+    "requests",
+    "qrcode",
+    "Pillow",
+    "fastapi",
+    "uvicorn",
+    "pywebview>=5.0",
+    "tomllib; python_version < '3.11'",
+]
+
+[project.scripts]
+bili-manager-tk = "bili_manager.__main__:main"
+bili-manager-web = "bili_manager.app_webview:main"
+bili-manager-api = "bili_manager.api_http:start_api_server"
 
 [tool.ruff]
 line-length = 100
@@ -62,5 +76,8 @@ module = [
     "PIL.*",
     "qrcode.*",
     "requests.*",
+    "fastapi.*",
+    "uvicorn.*",
+    "webview.*",
 ]
 ignore_missing_imports = true
